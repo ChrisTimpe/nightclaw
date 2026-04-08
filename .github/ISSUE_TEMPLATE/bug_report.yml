@@ -1,0 +1,52 @@
+name: Bug Report
+description: Report unexpected behavior or a broken install
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Specific reproduction steps and validate.sh output are most useful.
+
+  - type: input
+    id: openclaw-version
+    attributes:
+      label: OpenClaw version
+      placeholder: "e.g. 2026.3.24"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model in use
+      placeholder: "e.g. GPT-5, Claude 3.5 Sonnet, gemini-2.5-pro"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: validate-output
+    attributes:
+      label: Output of `bash scripts/validate.sh`
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: audit-log
+    attributes:
+      label: Relevant AUDIT-LOG.md entries (redact anything sensitive)
+      render: shell

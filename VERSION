@@ -1,0 +1,11 @@
+v0.1.0 | 2026-04-07 | nightclaw-v0.1.0-release
+
+Check: cat {WORKSPACE_ROOT}/VERSION
+
+Changelog:
+  v0.1.0 — Initial public release. Autonomous overnight agent orchestration
+            framework for OpenClaw. LONGRUNNER project lifecycle, SHA-256 integrity
+            manifest, session lock protocol, 33 indexed failure modes, pre-approval
+            system, morning-check workflow, and self-healing audit trail.
+            Built with AI assistance. See README.md and CHANGELOG.md.
+            See INSTALL.md for setup.

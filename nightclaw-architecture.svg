@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650" width="900" height="650">
+<defs>
+<marker id="ma" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F59E0B"/></marker>
+<marker id="mc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0EA5E9"/></marker>
+<marker id="mg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#10B981"/></marker>
+<marker id="mv" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8B5CF6"/></marker>
+<marker id="mo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F97316"/></marker>
+<marker id="mr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#EF4444"/></marker>
+<marker id="mz" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker>
+</defs>
+<rect x="0" y="0" width="900" height="650" rx="12" fill="#0F172A" stroke="none"/>
+<text x="450" y="36" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="17" font-weight="700" fill="#F1F5F9">NightClaw — Six Integration Synergies</text>
+<text x="450" y="54" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11"  fill="#CBD5E1">System-level chains operational from first cron pass  ·  v0.1.0</text>
+<rect x="15" y="72" width="278" height="260" rx="8" fill="#0F172A" stroke="#F59E0B" stroke-width="1.5"/>
+<rect x="15" y="72" width="278" height="32" rx="8" fill="#F59E0B" stroke="none"/>
+<rect x="15" y="88" width="278" height="16" rx="4" fill="#F59E0B" stroke="none"/>
+<text x="154" y="93" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#0F172A">① Domain Anchor → Tier 4 → Notifications</text>
+<rect x="90" y="116" width="128" height="28" rx="4" fill="#2D1A00" stroke="#F59E0B" stroke-width="1"/>
+<text x="154" y="130.33333333333331" text-anchor="middle" font-family="'Courier New',monospace" font-size="12"  fill="#FEF3C7">SOUL.md</text>
+<text x="154" y="137.66666666666666" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#FDE68A">§Domain Anchor (manual setup)</text>
+<line x1="154" y1="144" x2="154" y2="156" stroke="#F59E0B" stroke-width="1.5" marker-end="url(#ma)"/>
+<rect x="76" y="158" width="156" height="28" rx="4" fill="#2D1A00" stroke="#F59E0B" stroke-width="1"/>
+<text x="154" y="171.33333333333334" text-anchor="middle" font-family="'Courier New',monospace" font-size="10"  fill="#FEF3C7">OPS-IDLE-CYCLE.md</text>
+<text x="154" y="179.66666666666666" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#FDE68A">Tier 4 — autonomous project proposal</text>
+<line x1="154" y1="186" x2="154" y2="198" stroke="#F59E0B" stroke-width="1.5" marker-end="url(#ma)"/>
+<rect x="84" y="200" width="140" height="22" rx="4" fill="#2D1A00" stroke="#F59E0B" stroke-width="1"/>
+<text x="154" y="215.0" text-anchor="middle" font-family="'Courier New',monospace" font-size="10"  fill="#FDE68A">Draft LONGRUNNER.md</text>
+<line x1="154" y1="222" x2="154" y2="234" stroke="#F59E0B" stroke-width="1.5" marker-end="url(#ma)"/>
+<rect x="80" y="236" width="148" height="28" rx="4" fill="#2D1A00" stroke="#F59E0B" stroke-width="1"/>
+<text x="154" y="249.33333333333334" text-anchor="middle" font-family="'Courier New',monospace" font-size="11"  fill="#FEF3C7">NOTIFICATIONS.md</text>
+<text x="154" y="257.66666666666663" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FDE68A">MEDIUM priority entry</text>
+<line x1="154" y1="264" x2="154" y2="276" stroke="#F59E0B" stroke-width="1.5" marker-end="url(#ma)"/>
+<rect x="74" y="278" width="160" height="22" rx="4" fill="#78350F" stroke="#F59E0B" stroke-width="1"/>
+<text x="154" y="292" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="10"  fill="#FEF3C7">Owner morning review → approve</text>
+<text x="154" y="314" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#B45309">One-word approval activates the project</text>
+<rect x="308" y="72" width="278" height="260" rx="8" fill="#0F172A" stroke="#0EA5E9" stroke-width="1.5"/>
+<rect x="308" y="72" width="278" height="32" rx="8" fill="#0EA5E9" stroke="none"/>
+<rect x="308" y="88" width="278" height="16" rx="4" fill="#0EA5E9" stroke="none"/>
+<text x="447" y="93" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#0F172A">② Session Lock — Two Release Paths</text>
+<rect x="318" y="116" width="258" height="22" rx="4" fill="#002A3F" stroke="#0EA5E9" stroke-width="1"/>
+<text x="447" y="130" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="10"  fill="#E0F2FE">STARTUP: both agents acquire lock</text>
+<line x1="447" y1="138" x2="447" y2="150" stroke="#0EA5E9" stroke-width="1.5" marker-end="url(#mc)"/>
+<rect x="385" y="152" width="124" height="30" rx="6" fill="#002A3F" stroke="#0EA5E9" stroke-width="2"/>
+<text x="447" y="166" text-anchor="middle" font-family="'Courier New',monospace" font-size="14" font-weight="700" fill="#7DD3FC">LOCK.md</text>
+<text x="447" y="178" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#BAE6FD">mutex · 20-min window</text>
+<line x1="447" y1="182" x2="447" y2="200" stroke="#0EA5E9" stroke-width="1.5"/>
+<line x1="381" y1="200" x2="513" y2="200" stroke="#0EA5E9" stroke-width="1.5"/>
+<line x1="381" y1="200" x2="381" y2="212" stroke="#0EA5E9" stroke-width="1.5" marker-end="url(#mc)"/>
+<line x1="513" y1="200" x2="513" y2="212" stroke="#EF4444" stroke-width="1.5" marker-end="url(#mr)"/>
+<text x="381" y="196" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#38BDF8">T9 normal</text>
+<text x="513" y="196" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#F87171">T0 fail</text>
+<rect x="323" y="214" width="116" height="32" rx="4" fill="#002A3F" stroke="#0EA5E9" stroke-width="1"/>
+<text x="381" y="226" text-anchor="middle" font-family="'Courier New',monospace" font-size="9"  fill="#7DD3FC">BUNDLE:session_close</text>
+<text x="381" y="238" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#BAE6FD">releases lock</text>
+<rect x="461" y="214" width="104" height="32" rx="4" fill="#2D0000" stroke="#EF4444" stroke-width="1"/>
+<text x="513" y="226" text-anchor="middle" font-family="'Courier New',monospace" font-size="9"  fill="#FCA5A5">BUNDLE:</text>
+<text x="513" y="238" text-anchor="middle" font-family="'Courier New',monospace" font-size="9"  fill="#FCA5A5">integrity_fail</text>
+<line x1="381" y1="246" x2="381" y2="258" stroke="#0EA5E9" stroke-width="1.5" marker-end="url(#mc)"/>
+<rect x="327" y="260" width="108" height="20" rx="4" fill="#003C5A" stroke="#0EA5E9" stroke-width="1"/>
+<text x="381" y="272" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#E0F2FE">next pass proceeds</text>
+<line x1="513" y1="246" x2="513" y2="258" stroke="#EF4444" stroke-width="1.5" marker-end="url(#mr)"/>
+<rect x="478" y="260" width="70" height="20" rx="4" fill="#7F1D1D" stroke="#EF4444" stroke-width="1.5"/>
+<text x="513" y="272" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">HALT</text>
+<text x="447" y="292" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">Orphan guard: lock &gt; 25 min old → auto-clear stale</text>
+<text x="447" y="306" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">Crash counter escalates: MEDIUM at 3 · HIGH at 5</text>
+<rect x="601" y="72" width="278" height="260" rx="8" fill="#0F172A" stroke="#10B981" stroke-width="1.5"/>
+<rect x="601" y="72" width="278" height="32" rx="8" fill="#10B981" stroke="none"/>
+<rect x="601" y="88" width="278" height="16" rx="4" fill="#10B981" stroke="none"/>
+<text x="740" y="93" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#0F172A">③ Three-Layer Task Management</text>
+<rect x="611" y="114" width="258" height="56" rx="5" fill="#003D1A" stroke="#10B981" stroke-width="1.5"/>
+<text x="740" y="130" text-anchor="middle" font-family="'Courier New',monospace" font-size="11" font-weight="700" fill="#DCFCE7">ACTIVE-PROJECTS.md</text>
+<text x="740" y="144" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#A7F3D0">Dispatch: priority · status · escalation flags</text>
+<text x="740" y="158" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#86EFAC">Edit one row to shift focus — no cron changes</text>
+<line x1="740" y1="170" x2="740" y2="180" stroke="#10B981" stroke-width="1.5" marker-end="url(#mg)"/>
+<text x="744" y="179" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#34D399">routes to ↓</text>
+<rect x="611" y="184" width="258" height="56" rx="5" fill="#004D22" stroke="#10B981" stroke-width="1.5"/>
+<text x="740" y="200" text-anchor="middle" font-family="'Courier New',monospace" font-size="11" font-weight="700" fill="#DCFCE7">ORCHESTRATOR.md</text>
+<text x="740" y="214" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#A7F3D0">Router: pick highest-priority active project</text>
+<text x="740" y="228" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#86EFAC">Handles TRANSITION-HOLD · phase gates</text>
+<line x1="740" y1="240" x2="740" y2="250" stroke="#10B981" stroke-width="1.5" marker-end="url(#mg)"/>
+<text x="744" y="249" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#34D399">opens ↓</text>
+<rect x="611" y="254" width="258" height="56" rx="5" fill="#005A28" stroke="#10B981" stroke-width="1.5"/>
+<text x="740" y="270" text-anchor="middle" font-family="'Courier New',monospace" font-size="11" font-weight="700" fill="#DCFCE7">LONGRUNNER.md</text>
+<text x="740" y="284" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#A7F3D0">Control: phase · stop_condition · next_pass</text>
+<text x="740" y="298" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#86EFAC">last_pass output · blockers · phase history</text>
+<text x="740" y="318" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">Crons are generic pulses — intelligence lives in these 3 files</text>
+<rect x="15" y="347" width="278" height="260" rx="8" fill="#0F172A" stroke="#8B5CF6" stroke-width="1.5"/>
+<rect x="15" y="347" width="278" height="32" rx="8" fill="#8B5CF6" stroke="none"/>
+<rect x="15" y="363" width="278" height="16" rx="4" fill="#8B5CF6" stroke="none"/>
+<text x="154" y="368" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#0F172A">④ T7 OS Improvement Gate</text>
+<rect x="74" y="391" width="160" height="22" rx="4" fill="#1C1040" stroke="#8B5CF6" stroke-width="1"/>
+<text x="154" y="405" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="10"  fill="#F3E8FF">End of every worker pass → T7</text>
+<line x1="154" y1="413" x2="154" y2="425" stroke="#8B5CF6" stroke-width="1.5" marker-end="url(#mv)"/>
+<polygon points="154,415 234,443 154,471 74,443" fill="#1C1040" stroke="#8B5CF6" stroke-width="1.5"/>
+<text x="154" y="438" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#F3E8FF">G1: non-obvious?</text>
+<text x="154" y="450" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#F3E8FF">G2: generalizable?</text>
+<line x1="234" y1="443" x2="266" y2="443" stroke="#8B5CF6" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="251" y="439" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#A78BFA">No</text>
+<text x="251" y="455" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">skip</text>
+<line x1="154" y1="471" x2="154" y2="483" stroke="#8B5CF6" stroke-width="1.5" marker-end="url(#mv)"/>
+<text x="159" y="481" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#A78BFA">Yes</text>
+<rect x="70" y="485" width="168" height="52" rx="4" fill="#1C1040" stroke="#8B5CF6" stroke-width="1"/>
+<text x="154" y="499" text-anchor="middle" font-family="'Courier New',monospace" font-size="10"  fill="#C4B5FD">OPS-FAILURE-MODES.md  (T7d)</text>
+<text x="154" y="513" text-anchor="middle" font-family="'Courier New',monospace" font-size="10"  fill="#C4B5FD">AGENTS-LESSONS.md</text>
+<text x="154" y="527" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#DDD6FE">Framework compounds across sessions</text>
+<text x="154" y="593" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">Novel blockers appended as new FM entries automatically</text>
+<rect x="308" y="347" width="278" height="260" rx="8" fill="#0F172A" stroke="#F97316" stroke-width="1.5"/>
+<rect x="308" y="347" width="278" height="32" rx="8" fill="#F97316" stroke="none"/>
+<rect x="308" y="363" width="278" height="16" rx="4" fill="#F97316" stroke="none"/>
+<text x="447" y="368" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#0F172A">⑤ Pre-Approval Chain (Async Authorization)</text>
+<rect x="318" y="391" width="258" height="22" rx="4" fill="#2D1400" stroke="#F97316" stroke-width="1"/>
+<text x="447" y="405" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="10"  fill="#FFF7ED">Owner writes PA entries before going offline</text>
+<line x1="447" y1="413" x2="447" y2="425" stroke="#F97316" stroke-width="1.5" marker-end="url(#mo)"/>
+<rect x="367" y="427" width="160" height="28" rx="4" fill="#2D1400" stroke="#F97316" stroke-width="1.5"/>
+<text x="447" y="439" text-anchor="middle" font-family="'Courier New',monospace" font-size="11" font-weight="700" fill="#FFF7ED">OPS-PREAPPROVAL.md</text>
+<text x="447" y="451" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FED7AA">PA-001, PA-002 + user PAs  (scope · expiry)</text>
+<line x1="447" y1="455" x2="447" y2="465" stroke="#F97316" stroke-width="1.5" marker-end="url(#mo)"/>
+<text x="447" y="462" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#FB923C">T2.7 validates: exists · ACTIVE · not expired · scope matches</text>
+<line x1="447" y1="469" x2="383" y2="477" stroke="#F97316" stroke-width="1.5"/>
+<line x1="447" y1="469" x2="511" y2="477" stroke="#94A3B8" stroke-width="1.5"/>
+<text x="383" y="467" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#FB923C">valid</text>
+<text x="511" y="467" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#94A3B8">invalid</text>
+<line x1="383" y1="477" x2="383" y2="487" stroke="#F97316" stroke-width="1.5" marker-end="url(#mo)"/>
+<line x1="511" y1="477" x2="511" y2="487" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mz)"/>
+<rect x="318" y="489" width="120" height="36" rx="4" fill="#2D1400" stroke="#F97316" stroke-width="1"/>
+<text x="378" y="501" text-anchor="middle" font-family="'Courier New',monospace" font-size="9"  fill="#FFF7ED">APPROVAL-CHAIN.md</text>
+<text x="378" y="513" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FED7AA">countersigned record</text>
+<text x="378" y="522" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#FB923C">→ execute action</text>
+<rect x="458" y="489" width="116" height="36" rx="4" fill="#1C1917" stroke="#94A3B8" stroke-width="1"/>
+<text x="516" y="501" text-anchor="middle" font-family="'Courier New',monospace" font-size="9"  fill="#FDE68A">surface_escalation</text>
+<text x="516" y="513" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#D97706">NOTIFICATIONS.md</text>
+<text x="516" y="522" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#94A3B8">await review</text>
+<line x1="378" y1="525" x2="447" y2="545" stroke="#F97316" stroke-width="1.5" marker-end="url(#mo)"/>
+<rect x="318" y="547" width="258" height="22" rx="4" fill="#7C2D12" stroke="#F97316" stroke-width="1"/>
+<text x="447" y="561" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FFF7ED">Morning: APPROVAL-CHAIN + NOTIFICATIONS review</text>
+<text x="447" y="593" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">PA-001 and PA-002 ship prebuilt — active from first pass</text>
+<rect x="601" y="347" width="278" height="260" rx="8" fill="#0F172A" stroke="#EF4444" stroke-width="1.5"/>
+<rect x="601" y="347" width="278" height="32" rx="8" fill="#EF4444" stroke="none"/>
+<rect x="601" y="363" width="278" height="16" rx="4" fill="#EF4444" stroke="none"/>
+<text x="740" y="368" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#0F172A">⑥ Cron Security Model</text>
+<rect x="611" y="391" width="258" height="32" rx="4" fill="#2D0000" stroke="#EF4444" stroke-width="1"/>
+<text x="740" y="404" text-anchor="middle" font-family="'Courier New',monospace" font-size="10" font-weight="700" fill="#FEE2E2">openclaw cron add</text>
+<text x="740" y="417" text-anchor="middle" font-family="'Courier New',monospace" font-size="9"  fill="#FCA5A5">--light-context   --no-deliver</text>
+<line x1="740" y1="423" x2="740" y2="433" stroke="#EF4444" stroke-width="1.5" marker-end="url(#mr)"/>
+<rect x="611" y="435" width="258" height="20" rx="4" fill="#1C1917" stroke="none"/>
+<rect x="611" y="435" width="258" height="20" rx="4" fill="none" stroke="#4B5563" stroke-dasharray="4,3" stroke-width="1"/>
+<text x="740" y="448" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#9CA3AF">bootstrap skipped  ·  saves ~5K tokens per pass</text>
+<line x1="740" y1="455" x2="740" y2="465" stroke="#EF4444" stroke-width="1.5" marker-end="url(#mr)"/>
+<rect x="658" y="467" width="164" height="28" rx="6" fill="#2D0000" stroke="#EF4444" stroke-width="2"/>
+<text x="740" y="479" text-anchor="middle" font-family="'Courier New',monospace" font-size="12" font-weight="700" fill="#FC8181">CRON-HARDLINES.md</text>
+<text x="740" y="492" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8"  fill="#FCA5A5">Read first · distilled from SOUL.md · ~800 tokens</text>
+<line x1="740" y1="495" x2="740" y2="507" stroke="#EF4444" stroke-width="1.5" marker-end="url(#mr)"/>
+<text x="740" y="505" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#F87171">Guards against:</text>
+<text x="619" y="519" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FECACA">• Prompt injection via fetched web content</text>
+<text x="619" y="533" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FECACA">• Skill injection without owner confirmation</text>
+<text x="619" y="547" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FECACA">• Bootstrap hook untrusted content</text>
+<text x="619" y="561" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#FECACA">• Raw gateway log poisoning</text>
+<text x="740" y="593" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="9"  fill="#94A3B8">If diverges from SOUL.md: SOUL.md wins</text>
+</svg>

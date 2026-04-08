@@ -1,0 +1,528 @@
+# NightClaw — Autonomous Overnight Agent Governance for OpenClaw
+
+**NightClaw turns OpenClaw into a system that works for you while you sleep.**
+
+You configure a domain focus. You go to sleep. NightClaw runs structured research passes overnight, builds on prior work across sessions, and surfaces a morning briefing of what it found, what decisions it needs from you, and what it wants to work on next. You read it in two minutes, say yes or no, and it runs again tonight.
+
+---
+
+## At a Glance
+
+**What is OpenClaw?** An open-source AI agent runtime that gives an LLM a shell, a filesystem, scheduled cron tasks, and persistent memory — running on your own hardware. [250,000+ GitHub stars as of April 2026](https://github.com/openclaw/openclaw). This is what NightClaw runs on.
+
+**What NightClaw adds:** An audit trail, task lifecycle management, and a self-healing execution loop — all as markdown files the agent reads directly. No external service. No API. No code required. The governance layer lives inside the workspace the agent already reads.
+
+**No Docker. No daemon. No database.** It is a folder of markdown files you drop into your OpenClaw workspace. The agent reads them. That's the entire runtime.
+
+**Platform:** Any OS where OpenClaw runs — macOS, Ubuntu, Windows (WSL2), remote Linux server, cloud VM. There is nothing OS-specific in NightClaw itself. The install script requires `bash`, `sed`, `python3`, and `sha256sum` — all present by default on macOS and any Linux distribution.
+
+**Cost:** NightClaw itself is free (MIT). Running it costs only your LLM API tokens — Ollama works at zero cost for evaluation; Claude Sonnet 4.5 or GPT-5 class models are recommended for autonomous production passes. Token baseline: ~2,400 tokens per cron pass startup + ~6,900 session floor (SOUL + AGENTS + WORKING + ACTIVE-PROJECTS). See DEPLOY.md for full budget guidance.
+
+**Web search:** OpenClaw's native search tool uses DuckDuckGo with a hard limit of ~10–15 queries per session. This is sufficient for targeted research passes but will block under heavy query patterns. For higher-volume research workloads, configure the [SearXNG plugin](https://github.com/openclaw/openclaw/releases) (bundled in OpenClaw 2026.4.x) or a dedicated search API (Serper, Brave) in your OpenClaw setup before running research-heavy projects.
+
+**What you actually see after setup:**
+
+| File | What it shows |
+|------|---------------|
+| `NOTIFICATIONS.md` | Every proposal, blocker, and escalation the agent has surfaced — your daily inbox |
+| `audit/AUDIT-LOG.md` | Append-only record of every action the agent took, with authorization and outcome |
+| `audit/SESSION-REGISTRY.md` | Every cron run: model used, tokens consumed, projects touched, outcome |
+| `ACTIVE-PROJECTS.md` | What the agent is working on and at what priority — edit this to shift focus |
+| `PROJECTS/[slug]/LONGRUNNER.md` | Per-project control file: current phase, last pass, next pass objective, blockers |
+| `memory/YYYY-MM-DD.md` | Structured log of what each pass actually did, written by the agent |
+
+**Already have OpenClaw running?** See [Adding NightClaw to an Existing Workspace](#adding-nightclaw-to-an-existing-workspace) below.
+
+> **⚠ NOTICE:** This framework was developed with AI assistance. It should be reviewed and adapted before use in any environment where failures could cause material harm. See the Disclaimers section.
+
+> **Placeholders:** Files in this repo contain `{OWNER}`, `{WORKSPACE_ROOT}`, and similar tokens. These are intentional — `scripts/install.sh` substitutes them during setup. Do not edit them manually before running the install script.
+
+---
+
+## The Problem This Solves
+
+People are already running OpenClaw overnight. Crons are already set. The question isn't whether to run an autonomous agent — it's what you find in the morning.
+
+Right now, the morning-after experience is: scattered local logs in a format designed for debugging, not review. No record of what was authorized versus what was inferred. No structure linking a decision to its outcome. No way to know whether a pass that "completed" actually produced value or just ran. No way to know what the agent tried and couldn't do, and why.
+
+Marc Andreessen called YOLO mode and keeping logs the right instinct — "if you don't give [the agent] a bank account, it's just going to break into your bank account anyway and take your money" ([a16z / Latent Space Podcast, Apr 2026, ~55:49](https://podscripts.co/podcasts/a16z-podcast/marc-andreessen-on-ai-winters-and-agent-breakthroughs)). Jensen Huang said every company needs an OpenClaw strategy. NemoClaw answers the runtime sandbox question. **NightClaw answers the morning-after question** — what did the agent do, what did it decide, what failed, what's it working on now, and what does it need from you before the next pass runs tonight.
+
+The governance layer lives inside the workspace the agent already reads — the same markdown it reasons over natively. No external service. No separate infrastructure. No code.
+
+Concretely, OpenClaw ships with cron scheduling and LLM sessions. There is no native:
+- Audit trail linking action → authorization → outcome
+- Long-running task lifecycle management across multiple sessions
+- Failure taxonomy or self-correction loop
+- Schema drift detection for external data sources
+- Structured surface for reviewing what the agent discovered overnight
+
+A data engineer running ETL on a traditional stack manually monitors jobs, debugs failures, updates field maps when schemas change, and maintains audit records of what ran. **NightClaw externalizes all of that into the agent's own workspace.** The failure mode registry is the encoded runbook. The LONGRUNNER is the job definition. The audit trail is the logging infrastructure. The cron pattern is the scheduler. Because it's all natural language the agent reads directly, the agent can reason about failures — not just re-execute mechanically.
+
+---
+
+## What You Get
+
+**Audit trail** — what OpenClaw doesn't provide out of the box:
+- Append-only action log with field-level change attribution
+- Session registry tracking every worker and manager pass with token accounting
+- Approval chain linking owner authorization → agent action → audit entry
+- Session state drift detection via SHA-256 integrity manifest
+
+**Long-running task lifecycle:**
+- LONGRUNNER per-project control file — explicit pass boundaries, stop conditions, retry state
+- Phase-bound project lifecycle with verifiable completion criteria
+- Multi-project dispatch via priority-ranked table — shift focus by changing one number
+- Manager review pass that surfaces direction problems before they compound
+
+**Self-healing execution loop:**
+- 33 indexed failure modes — agent diagnoses before retrying, not after
+- Blocker decision tree: known failure mode → apply fix; pre-approved → act; partial completion possible → continue; none of the above → surface proposal, re-route, designed to never halt on recoverable blockers
+- Novel blockers logged as new failure modes so the system never hits the same wall twice
+- Quality gate (three-question test) preventing low-value output from being marked complete
+
+**Human proposal surface and approval workflow:**
+- Agent surfaces enhancement proposals to NOTIFICATIONS.md — non-blocking, async
+- System continues working on everything it can while proposals await review
+- Owner reviews at their own cadence (morning check is the natural touchpoint)
+- Pre-approval system for pre-authorizing action classes before going offline
+- Model tiering: approved enhancements can specify a different (higher-capability) model — cost categorized separately from routine execution
+
+**Behavioral discipline** (not enforced security — honest framing):
+- Hard Lines encoded as agent identity — behavioral defaults the agent internalizes as character
+- Pre-write protocol gating every file write (scope check → dependency read → execute → audit)
+- Dependency tracking — changing a source file surfaces all downstream dependents
+- Write tiers: APPEND, STANDARD, PROTECTED, MANIFEST-VERIFY
+
+**Skill layer (Part 2 — replaceable):**
+- OPS-KNOWLEDGE-EXECUTION.md demonstrates the field map + script template pattern for known systems
+- Agent reads field maps before writing any script → confirmed knowledge, not inference
+- Agent extends maps after successful runs → learning loop that compounds over time
+- Ships with generic scaffolding; add field maps for your own systems and APIs
+
+---
+
+## Quick Start
+
+```bash
+# For fresh installs only — this overwrites your workspace directory
+# Clone directly into your OpenClaw workspace
+git clone https://github.com/ChrisTimpe/nightclaw ~/.openclaw/workspace
+cd ~/.openclaw/workspace
+bash scripts/install.sh
+```
+
+```bash
+# Or from a downloaded zip release
+cp -r nightclaw-v0.1.0-release/* ~/.openclaw/workspace/
+cd ~/.openclaw/workspace
+bash scripts/install.sh
+```
+
+The install script will prompt for your configuration values, substitute all placeholders, and generate the initial integrity hashes.
+
+**Input sanitization note:** All values entered during install must contain only alphanumeric characters, hyphens, underscores, forward slashes, periods, and tildes. Do not include shell metacharacters (spaces, quotes, pipes, semicolons, dollar signs, backticks, etc.) in any configuration value.
+
+### Manual Setup (if not using install script)
+
+```bash
+OWNER="yourname"
+WORKSPACE_ROOT="$HOME/.openclaw/workspace"
+CRON_DIR="$HOME/.openclaw/cron"
+LOGS_DIR="$HOME/.openclaw/logs"
+PLATFORM="Ubuntu/WSL2"
+INSTALL_DATE=$(date +%Y-%m-%d)
+
+# Values must be alphanumeric, hyphens, underscores, forward slashes, and periods only.
+# No spaces in any value — spaces break sed substitutions.
+find . -name "*.md" -exec sed -i \
+  -e "s|{OWNER}|$OWNER|g" \
+  -e "s|{WORKSPACE_ROOT}|$WORKSPACE_ROOT|g" \
+  -e "s|{OPENCLAW_CRON_DIR}|$CRON_DIR|g" \
+  -e "s|{OPENCLAW_LOGS_DIR}|$LOGS_DIR|g" \
+  -e "s|{PLATFORM}|$PLATFORM|g" \
+  -e "s|{INSTALL_DATE}|$INSTALL_DATE|g" \
+  {} \;
+
+# {DOMAIN_ANCHOR} is set manually — open SOUL.md and replace the
+# Domain Anchor section with your own domain focus or consulting practice.
+
+# Generate integrity hashes (first-sign)
+bash scripts/verify-integrity.sh
+# Paste each hash into audit/INTEGRITY-MANIFEST.md
+
+# Set agent timeout
+openclaw config set agents.defaults.timeoutSeconds 600
+
+# Create two crons
+openclaw cron add \
+  --name "nightclaw-worker-trigger" \
+  --every 60m \
+  --session "session:nightclaw-worker" \
+  --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
+  --light-context \
+  --no-deliver
+
+openclaw cron add \
+  --name "nightclaw-manager-trigger" \
+  --every 105m \
+  --session "session:nightclaw-manager" \
+  --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
+  --light-context \
+  --no-deliver
+```
+
+> **Cron session names** are `nightclaw-worker` and `nightclaw-manager` by default. Rename them to anything — update both `--name` and `--session` together, and update references in `orchestration-os/OPS-CRON-SETUP.md`.
+
+Full setup details: [`INSTALL.md`](INSTALL.md) → [`DEPLOY.md`](DEPLOY.md)
+
+---
+
+## Your First Project
+
+After install and cron setup, **you don't need to do anything.** On the first idle cycle the worker reads your Domain Anchor in `SOUL.md` and proposes a first project automatically. You wake up to a draft waiting for your one-word approval.
+
+**The default overnight flow:**
+
+1. Crons start running
+2. First idle cycle: worker reads Domain Anchor → drafts `PROJECTS/[slug]/LONGRUNNER-DRAFT.md` → surfaces MEDIUM notification
+3. You open a main session: agent briefs you on the draft and what the first pass will do
+4. You say **"approve"** — agent activates the project, worker picks it up on next pass
+5. Overnight: worker executes research passes, manager reviews, progress accumulates
+6. Morning: you read `NOTIFICATIONS.md` for a summary of what happened
+
+**To start immediately without waiting:**
+
+```bash
+# Scaffold a project in one command
+bash scripts/new-project.sh my-first-project
+
+# Fill in CORE section of the generated LONGRUNNER.md
+# (Required: mission, phase.objective, stop_condition, next_pass.objective)
+
+# Force-run the worker now
+openclaw cron run [worker-id]   # get ID from: openclaw cron list
+```
+
+**What to expect on first run:**
+- Worker reads your LONGRUNNER, executes the first pass objective
+- Writes a structured log to `memory/YYYY-MM-DD.md`
+- Updates `last_pass` in your LONGRUNNER
+- Logs to `audit/SESSION-REGISTRY.md`
+- If blocked: writes a proposal to `NOTIFICATIONS.md` and routes to next available project
+
+**Multiple projects:** NightClaw is designed to run a portfolio. While one project is in review or transition, the worker routes to the next. For meaningful overnight throughput, 2–3 active projects at different phases is the intended operating mode.
+
+> **Reference:** `PROJECTS/example-research/LONGRUNNER.md` is a fully filled-in example you can read before creating your own. It has no effect on the running system unless added to `ACTIVE-PROJECTS.md`.
+
+---
+
+## Adding NightClaw to an Existing Workspace
+
+If OpenClaw is already running, NightClaw drops in alongside it. The governance layer — `orchestration-os/`, `audit/`, `scripts/`, `PROJECTS/`, `memory/`, `skills/`, and a set of new root-level files — adds cleanly with no conflicts. A handful of root identity files (`SOUL.md`, `AGENTS.md`, `MEMORY.md`, and a few others) will replace OpenClaw's defaults — this is intentional. NightClaw's versions of those files contain the behavioral contracts and governance wiring the system needs.
+
+**macOS, Linux, remote server, WSL2, or cloud VM:**
+```bash
+cd ~/.openclaw/workspace        # or wherever your workspace is
+curl -L https://github.com/ChrisTimpe/nightclaw/archive/refs/heads/main.tar.gz | tar xz --strip-components=1
+bash scripts/install.sh
+```
+
+That's it for a vanilla OpenClaw workspace. The install script prompts for your configuration values and generates the integrity hashes.
+
+> **Prefer git?** `git clone https://github.com/ChrisTimpe/nightclaw /tmp/nightclaw && cp -r /tmp/nightclaw/* ~/.openclaw/workspace/`
+
+**If you've customized any of these files**, back them up before running the curl command — they will be overwritten:
+
+```
+SOUL.md    AGENTS.md    AGENTS-CORE.md    WORKING.md
+MEMORY.md  IDENTITY.md  USER.md           HEARTBEAT.md  TOOLS.md
+```
+
+After install, merge your customizations back in. Content worth preserving: your persona or custom Hard Lines in `SOUL.md`, domain restrictions in `USER.md`, memory entries in `MEMORY.md`. NightClaw's versions of these files are required for governance to work — your content goes on top, not instead.
+
+**If your workspace is already active (crons running):** Pause all projects first, drop in the files, run `install.sh`, then re-enable.
+```bash
+# In ACTIVE-PROJECTS.md: set all rows to status: paused
+# Then install, then re-enable one project at a time
+```
+
+---
+
+## How It Works
+
+Two crons run permanently. The **worker** fires every 60 minutes: verifies session state, reads the dispatch table, routes to the highest-priority active project, and executes one bounded pass (T0–T9): drift check → dispatch → tool pre-flight → execute → validate → quality check → state update → OS improvement → session close. If it hits a blocker, it runs the blocker decision tree — applies the known fix, checks pre-approvals, attempts partial completion, or surfaces a proposal and re-routes. It is designed to never halt on recoverable blockers — integrity failures halt by design.
+
+The **manager** fires every 105 minutes: verifies session state, surfaces escalations, checks for worker crash state, runs quality and direction reviews, rebalances priorities, and audits recent passes. It is the human's proxy inside the system.
+
+The **human touchpoint** is async. The agent surfaces proposals, blockers, and enhancement candidates to NOTIFICATIONS.md as it encounters them. The owner reviews at their own cadence — typically a morning check — approves or guides, and the next worker pass acts on those decisions. This is the designed interaction pattern, not an exception flow.
+
+```
+ACTIVE-PROJECTS.md              ← what to work on (dispatch table)
+PROJECTS/[slug]/LONGRUNNER.md   ← how to work on it (per-project control file)
+NOTIFICATIONS.md                ← what needs human attention (proposals + escalations)
+CRON-WORKER-PROMPT.md           ← worker protocol (T0–T9)
+CRON-MANAGER-PROMPT.md          ← manager protocol (T0–T9)
+```
+
+---
+
+## File Map
+
+### Root
+
+```
+SOUL.md                    Agent identity — Hard Lines as behavioral defaults, task discipline
+AGENTS.md                  Navigation index — points to AGENTS-CORE.md and AGENTS-LESSONS.md
+AGENTS-CORE.md             PROTECTED behavioral contracts, sub-agent rules, memory model
+AGENTS-LESSONS.md          T7d lesson accumulation (STANDARD — written by agent)
+IDENTITY.md                Agent persona template (filled on first run)
+USER.md                    Owner profile and domain restrictions
+MEMORY.md                  Long-term memory (auto-injected each session)
+HEARTBEAT.md               Periodic check-in and cron trigger routing
+WORKING.md                 Session briefing template
+ACTIVE-PROJECTS.md         Priority-ranked dispatch table
+LOCK.md                    Session lock — prevents concurrent cron writes (STANDARD)
+NOTIFICATIONS.md           Async proposal + escalation surface (agent writes, owner reads)
+TOOLS.md                   Tool notes and local environment config
+VERSION                    Current version identifier
+INSTALL.md                 Setup guide
+DEPLOY.md                  Complete deployment guide
+UPGRADING.md               Upgrade guide for existing deployments
+CONTRIBUTING.md            Contribution guidelines
+README.md                  This file
+LICENSE                    MIT license
+CHANGELOG.md               Release history
+CODE_OF_CONDUCT.md         Contributor Covenant v2.1
+SECURITY.md                Vulnerability reporting policy
+.gitignore                 Standard git exclusions
+```
+
+### audit/
+
+```
+AUDIT-LOG.md               Append-only action log
+INTEGRITY-MANIFEST.md      SHA-256 drift detection for 11 core framework files
+APPROVAL-CHAIN.md          Pre-approval invocation chain with scope verification
+SESSION-REGISTRY.md        Per-session run record with token tracking
+CHANGE-LOG.md              Field-level state change log
+```
+
+### orchestration-os/
+
+```
+START-HERE.md              Read first — three rules, routing table, system overview
+ORCHESTRATOR.md            Multi-project dispatch + phase transition protocol (runtime protocol)
+CRON-WORKER-PROMPT.md      Worker cron protocol (T0–T9)
+CRON-MANAGER-PROMPT.md     Manager cron protocol (T0–T9)
+CRON-HARDLINES.md          Distilled behavioral discipline constraints for cron sessions
+REGISTRY.md                System catalog: objects, write routing, dependencies, bundles, change-log format
+OPS-CRON-SETUP.md          Cron configuration, cadence tuning, setup checklist
+OPS-AUTONOMOUS-SAFETY.md   Behavioral discipline contract + blocker decision tree (self-healing core)
+OPS-PREAPPROVAL.md         Pre-authorize action classes for overnight runs
+OPS-QUALITY-STANDARD.md    Three-question quality test + four-question value methodology
+OPS-FAILURE-MODES.md       33 indexed failure modes — diagnose before retrying
+OPS-KNOWLEDGE-EXECUTION.md Part 2: skill layer — field maps + script templates (replaceable; add your own systems)
+OPS-TOOL-REGISTRY.md       Tool constraint knowledge
+OPS-IDLE-CYCLE.md          Ranked autonomous work when no active project
+OPS-PASS-LOG-FORMAT.md     Structured daily memory log format
+LONGRUNNER-TEMPLATE.md     Project control file template
+PROJECT-SCHEMA-TEMPLATE.md Per-project schema template
+TOOL-STATUS.md             Fast pre-flight tool check (~200 tokens)
+```
+
+### scripts/
+
+```
+scripts/install.sh          Automates placeholder substitution + first-sign hash generation
+scripts/verify-integrity.sh Generates SHA-256 hashes for all protected files
+scripts/validate.sh         Checks internal consistency (file references, registry completeness)
+scripts/resign.sh           Re-signs all protected files after manual edits (updates INTEGRITY-MANIFEST.md)
+scripts/upgrade.sh          Merges updated NightClaw files into an existing workspace without data loss
+scripts/new-project.sh      Scaffolds a new LONGRUNNER project directory from template
+scripts/check-lock.py       Diagnostic — prints current LOCK.md state (manual use only; exec-blocked in cron)
+scripts/smoke-test.sh       First-run smoke test — 18 checks simulating a full new user setup in an isolated temp directory
+```
+
+### PROJECTS/
+
+```
+PROJECTS/MANAGER-REVIEW-REGISTRY.md  Global project scoreboard for manager reviews
+```
+
+### Directories
+
+```
+memory/                    Daily session logs (written by agent at runtime)
+skills/                    Agent skill files (added by user)
+```
+
+---
+
+## Day-to-Day Operation
+
+| Action | How |
+|--------|-----|
+| Check what's running | Read `ACTIVE-PROJECTS.md` or ask the agent |
+| See proposals + escalations | Read `NOTIFICATIONS.md` |
+| Add a project | Copy `LONGRUNNER-TEMPLATE.md` → `PROJECTS/[slug]/LONGRUNNER.md`, add row to `ACTIVE-PROJECTS.md` |
+| Shift focus | Change priority numbers in `ACTIVE-PROJECTS.md` |
+| Pause a project | Set its status to `paused` |
+| Emergency stop | Set all rows in `ACTIVE-PROJECTS.md` to `paused` |
+| Authorize overnight work | Add entries to `OPS-PREAPPROVAL.md` before going offline |
+| Approve an enhancement proposal | Add a pre-approval entry in `OPS-PREAPPROVAL.md` referencing the proposal |
+| Adjust cron cadence | `openclaw cron delete [id]` then recreate with new `--every` value |
+| Validate framework consistency | Run `bash scripts/validate.sh` |
+| Archive old audit logs | Review `audit/AUDIT-LOG.md` periodically (monthly recommended) |
+
+---
+
+## Origin and Attribution
+
+NightClaw originated these patterns for OpenClaw workspace governance. If you fork, port, or build on this work, no permission is required — but attribution is appreciated, and credit where it belongs matters to the community that made it possible.
+
+The concepts introduced here, as of v0.1.0 (April 2026):
+
+- **Workspace-native governance** — the idea that an agent's governance layer should live inside the workspace the agent reads, not in external infrastructure
+- **LONGRUNNER lifecycle** — per-project control file with explicit phases, verifiable stop conditions, phase transition protocol, and retry state
+- **Indexed failure mode registry** — classified failure taxonomy the agent reads before retrying, with root cause, detection signal, fix, and prevention per entry; novel failures appended at runtime so the system learns
+- **Typed object model with cascade integrity** — REGISTRY.md as a schema with R1–R7 (objects, field contracts, write routing, dependency edges, bundles, self-consistency rules, change-log format); pre-write protocol traversing dependency edges before every write
+- **Bi-temporal field-level change log** — `t_written` / `t_valid` split with point-in-time reconstruction
+- **Hard Lines as behavioral identity** — behavioral discipline encoded as agent character rather than enforced constraints; CRON-HARDLINES.md distillation for light-context cron sessions
+- **Pre-approval system for unattended overnight runs** — scoped action class authorization with expiry, scope verification, and countersigned approval chain
+- **Manager/Worker two-cron split** — dedicated orchestration and governance passes at different cadences, both project-agnostic, driven by a priority-ranked dispatch table
+- **T7 OS improvement gate** — G1 (non-obvious) + G2 (generalizable) gate before any agent write to framework files; prevents noise accumulation
+- **TRANSITION-HOLD with auto-pause** — phase completion triggers human review gate; three missed escalations auto-pauses the project
+- **Morning-check async workflow** — structured proposal surface the agent writes to during overnight passes; owner reviews at their own cadence
+- **Skill-attachment pattern (Part 2)** — domain execution knowledge encoded as a workspace file the agent reads before writing code; agent extends the file after successful runs, creating a compounding learning loop
+
+This is v0.1.0. The framework will evolve. Whatever it becomes, this is where it started.
+
+---
+
+## Design Model
+
+NightClaw is not a collection of markdown files with cross-references. It is an **object model with cascade integrity**.
+
+**The schema is `REGISTRY.md`.** R1 defines the objects. R2 defines field contracts. R3 is the write-routing table — tier and bundle per file. R4 is the dependency graph: typed edges that declare structural relationships between objects. R5 is the bundle library: named operations that execute multi-file writes as atomic units.
+
+**The cascade mechanism is the pre-write protocol** (`SOUL.md §1a`, PW-1–PW-5). When the agent writes any file, PW-2 greps R4 for that file's outbound edges and surfaces every downstream dependent. The agent does not manually reason about what might be affected — the schema declares it, and the protocol traverses it. The integrity guarantee holds only as far as R4 declares. Missing edges produce drift that looks like bugs but is actually incomplete schema.
+
+**For anyone extending the system:** add R4 edges before adding new file relationships. The edge is the contract. Without it, PW-2 has no way to know the relationship exists, the cascade terminates early, and downstream files silently diverge.
+
+**The AGENTS split** (v0.1.0): AGENTS.md is split into AGENTS-CORE.md (PROTECTED, in manifest) + AGENTS-LESSONS.md (STANDARD, T7d write target) + AGENTS.md (thin nav index, not in manifest). This follows the same pattern as ACTIVE-PROJECTS.md — separating the durable behavioral contract (drift-detected) from the accumulating agent-written layer (T7d target, never in manifest). AGENTS-CORE.md contains the behavioral contracts the agent internalizes as identity. AGENTS-LESSONS.md accumulates lessons written at T7d. AGENTS.md is the navigation pointer to both.
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  PART 1: ORCHESTRATION FRAMEWORK                             │
+├──────────────────────────────────────────────────────────────┤
+│                    SOUL.md (Behavioral Identity)             │
+│         Hard Lines + task discipline + output standards      │
+├──────────────────────────────────────────────────────────────┤
+│  CRON-HARDLINES.md    Behavioral constraints for cron runs   │
+├─────────────────────────┬────────────────────────────────────┤
+│   Worker (60 min)       │   Manager (105 min)                │
+│                         │                                    │
+│   T0 Drift check        │   T0 Crash detection               │
+│   T1 Dispatch           │   T1 Drift verification            │
+│   T2 LONGRUNNER         │   T2 Surface escalations           │
+│   T3 Tool check         │   T3 Change detection              │
+│   T4 Execute pass       │   T4 Value check                   │
+│   T5 Validate           │   T5 Direction check               │
+│   T6 State update       │   T6 Priority rebalancing          │
+│   T7 OS improvement     │   T7 Update registry               │
+│   T9 Session close      │   T8 Audit review + OS improve     │
+│                         │   T9 Session close                 │
+│   ↓ on blocker:         │                                    │
+│   Blocker decision tree │                                    │
+│   → self-heal or        │                                    │
+│   → propose + re-route  │                                    │
+├─────────────────────────┴────────────────────────────────────┤
+│              NOTIFICATIONS.md (Async Human Surface)          │
+│  Proposals  ·  Escalations  ·  Enhancement candidates       │
+│  Agent appends  →  Owner reviews at morning check            │
+├──────────────────────────────────────────────────────────────┤
+│              REGISTRY.md (System Catalog)                    │
+│  R1 Objects  R2 Fields  R3 Write routing  R4 Dependencies   │
+│  R5 Bundles  R6 Self-consistency rules  R7 Change-log format │
+├──────────────────────────────────────────────────────────────┤
+│                    audit/ (5 files)                          │
+│  AUDIT-LOG  SESSION-REGISTRY  CHANGE-LOG                    │
+│  INTEGRITY-MANIFEST (drift detection)  APPROVAL-CHAIN       │
+├──────────────────────────────────────────────────────────────┤
+│  PART 2: ETL SKILL LAYER (Proof of Concept — Replaceable)   │
+├──────────────────────────────────────────────────────────────┤
+│  OPS-KNOWLEDGE-EXECUTION.md                                  │
+│  Field maps + schema quirks + script templates               │
+│  Agent reads before writing code → confirmed knowledge       │
+│  Agent extends after successful runs → compounding accuracy  │
+│  Ships with generic scaffolding; add field maps for your     │
+│  own systems, APIs, and data sources                         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Integration Synergies
+
+Six chains active from first cron pass — Domain Anchor → Tier 4 → NOTIFICATIONS, session lock dual-release paths, three-layer task system, T7 OS improvement gate, pre-approval chain, and cron security model:
+
+![NightClaw Integration Synergies](nightclaw-architecture.svg)
+
+---
+
+## Requirements
+
+- [OpenClaw](https://github.com/openclaw/openclaw) `2026.2.13` or later (CVE patched). Recommended: `2026.4.5`+ — two fixes required: `--every` flag format changed in `2026.4.1` (human-readable strings: `60m`, `1h`); `--light-context` workspace injection bug fixed in `2026.4.5` (PR #60776). NightClaw's cron architecture depends on both. Current release: `2026.4.5`.
+- Any supported LLM provider — OpenAI, Anthropic, Google, or local models via Ollama
+- **Model minimum for autonomous cron sessions:** A capable instruction-following model is required. Confirmed working: Claude Sonnet 4.5+ (community sweet spot), GPT-5 class (gpt-5.3-codex or equivalent). Ollama works for evaluation and lightweight tiers. Do not use GPT-4o class or below for cron sessions — instruction-following degrades and orchestration controls cannot maintain correctness.
+- A terminal for one-time placeholder substitution and first-sign
+
+---
+
+## Compatibility
+
+**NemoClaw (NVIDIA):** Fully compatible. NightClaw and NemoClaw operate at distinct layers — NemoClaw provides runtime sandboxing (filesystem isolation, deny-by-default networking, PII stripping); NightClaw provides workspace governance (audit trail, task lifecycle, behavioral discipline, failure recovery). Run both together for defense in depth.
+
+**OpenClaw forks** (nanobot, ZeroClaw, PicoClaw, NanoClaw, and others): Should work if the fork preserves OpenClaw’s cron and session API — specifically `openclaw cron add`, `--light-context`, `--no-deliver`, and named sessions (`session:name`). Check the fork’s changelog for API compatibility before deploying.
+
+---
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). High-value contributions: new failure modes from real deployments, field maps for additional systems, blocker decision tree improvements from edge cases encountered in practice.
+
+---
+
+## Maintainer
+
+Created and maintained by [@ChrisTimpe](https://github.com/ChrisTimpe).
+
+Contributions welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). Security issues: use GitHub private vulnerability reporting (see [`SECURITY.md`](SECURITY.md)).
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+---
+
+## Disclaimers
+
+**⚠ AI-assisted framework.** This orchestration framework was developed with AI assistance using publicly available documentation, research, and design patterns. It should be reviewed and adapted by qualified professionals before use in any environment where failures could cause material harm.
+
+**Not legal, compliance, or regulatory advice.** NightClaw provides operational orchestration patterns for AI agent workspaces. It does not constitute legal counsel, and its use does not create any attorney-client or advisory relationship. Organizations should independently evaluate whether these patterns meet their specific compliance requirements.
+
+**Behavioral discipline, not enforced security.** NightClaw implements behavioral discipline constraints (Hard Lines) encoded as agent identity. These are reliable because a well-calibrated agent internalizes them — not because they are technically enforced. SHA-256 integrity checks detect accidental file drift between sessions; they do not prevent adversarial tampering. For tamper-proof integrity, use signed git commits.
+
+**No warranty of fitness.** The Software is provided "as is," without warranty of any kind. See the MIT License for full terms. The authors and contributors are not liable for any damages arising from the use of this software.
+
+**Automated system disclaimer.** This framework orchestrates automated AI agent actions. Users bear full responsibility for all actions taken by agents operating under this framework, including any financial, legal, or operational consequences.
+
+**Domain restriction disclaimer.** Domain restrictions configured in `USER.md` are user-set behavioral preferences, not legal compliance mechanisms. This software does not provide legal enforcement of employment obligations, non-compete agreements, or contractual restrictions.
+
+**Data storage notice.** This framework stores user-configured data (`USER.md`, `MEMORY.md`) and creates audit trails of agent activity in the local workspace. Users are responsible for compliance with applicable data protection regulations (including GDPR, CCPA, and similar laws) when deploying this framework.
+
+**Third-party references.** Any field maps or endpoint patterns added to `OPS-KNOWLEDGE-EXECUTION.md` should reference only publicly available documentation. No proprietary, NDA-protected, or confidential information from any third party should be included. All trademarks are the property of their respective owners.
+
+**Audit log size.** Agent activity is logged to `audit/AUDIT-LOG.md` and `audit/SESSION-REGISTRY.md`. In high-frequency deployments these files can grow large. Periodic archival is recommended (monthly is a reasonable default).

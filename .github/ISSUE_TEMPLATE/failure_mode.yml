@@ -1,0 +1,68 @@
+name: New Failure Mode
+description: Submit a failure mode encountered in real operation — the highest-value contribution to this project
+labels: [failure-mode, contribution]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New failure modes from real deployments are the most valuable contributions to NightClaw.
+        See [CONTRIBUTING.md](../../CONTRIBUTING.md) for format guidelines.
+        The existing 33 entries in `orchestration-os/OPS-FAILURE-MODES.md` are the reference.
+
+  - type: input
+    id: name
+    attributes:
+      label: Failure mode name (kebab-case)
+      placeholder: "e.g. api-rate-limit-silent-retry"
+    validations:
+      required: true
+
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What does the agent observe? What output is wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: Root cause
+      description: What underlying condition produces this symptom?
+    validations:
+      required: true
+
+  - type: textarea
+    id: detection-signal
+    attributes:
+      label: Detection signal
+      description: What in AUDIT-LOG, SESSION-REGISTRY, output, or behavior reveals this?
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix (numbered steps)
+    validations:
+      required: true
+
+  - type: textarea
+    id: prevention
+    attributes:
+      label: Prevention
+      description: What practice or check prevents recurrence?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - ACTIVE
+        - MITIGATED
+        - RESOLVED
+    validations:
+      required: true

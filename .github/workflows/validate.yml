@@ -1,0 +1,37 @@
+name: Validate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    name: Package Consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Run pre-install substitution (CI environment)
+        run: |
+          # Substitute placeholders with CI sentinel values so validate.sh
+          # placeholder check does not fail on the uninstalled repository state.
+          # These values are never deployed — they exist only for structural validation.
+          find . -name "*.md" -exec sed -i \
+            -e 's|{OWNER}|ci-owner|g' \
+            -e 's|{WORKSPACE_ROOT}|/ci/workspace|g' \
+            -e 's|{OPENCLAW_CRON_DIR}|/ci/cron|g' \
+            -e 's|{OPENCLAW_LOGS_DIR}|/ci/logs|g' \
+            -e 's|{PLATFORM}|CI-Linux|g' \
+            -e 's|{INSTALL_DATE}|1970-01-01|g' \
+            -e 's|{EXAMPLE_API}|ci-example-api|g' \
+            {} \;
+
+      - name: Run validate.sh
+        run: bash scripts/validate.sh
