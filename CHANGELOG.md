@@ -13,6 +13,42 @@ All notable changes to NightClaw will be documented here.
 
 ---
 
+## v0.2.0 — Deterministic Operations + Owner CLI
+
+**Released:** 2026-04-10
+
+### New: nightclaw-admin CLI
+- **Owner CLI** (`scripts/nightclaw-admin.sh`): manage the system from the terminal without spending tokens
+  - `status` / `alerts` / `log` — read system state
+  - `approve` / `decline` — act on project drafts
+  - `pause` / `unpause` / `priority` — manage active projects
+  - `guide` — inject guidance the worker picks up at T1.5
+  - `arm` / `disarm` — toggle pre-approvals with automatic re-signing
+  - `done` — resolve notifications
+  - All commands log to audit/AUDIT-LOG.md and audit/CHANGE-LOG.md in the same format the cron sessions use
+
+### New: Deterministic ops commands (nightclaw-ops.py)
+- **longrunner-extract** — extracts routing fields without full LONGRUNNER file read
+- **idle-triage** — deterministic idle cycle prerequisite check
+- **strategic-context** — pre-digests manager T3.5 inputs with A/B/C/D routing
+- **t7-dedup** — fuzzy word-overlap dedup against existing entries
+- **crash-context** — retrieves project/objective/crash history for recovery
+- **scan-notifications** rewritten — structural matching, section-scoped, skips code block templates
+
+### Enhancements
+- Cron prompts (worker + manager) updated to route through new ops commands
+- `--message` in cron command blocks trimmed from ~200 to ~30 tokens
+- REGISTRY.md: R2 field contracts added for 7 objects (NOTIFY-ARCH, MEMORY, REGISTRY, TOOLREG, LESSONS, LOCK, FM)
+- REGISTRY.md: CL5 PROTECTED-PATHS now includes AGENTS-CORE.md
+- All doc references to approval flow updated to mention nightclaw-admin CLI
+
+### Cost Impact
+- ~30-40% reduction in per-pass tokens from deterministic command routing
+- Zero-token owner management via nightclaw-admin CLI
+- Projected daily cost: ~$0.40-0.70 (down from ~$0.65-1.06) during active work
+
+---
+
 ## v0.1.0 — Initial Public Release
 
 **Released:** 2026-04-07
