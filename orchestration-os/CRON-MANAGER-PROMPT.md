@@ -80,7 +80,7 @@ T1  INTEGRITY VERIFICATION
   The script output is authoritative. Do not recompute hashes yourself.
   RESULT:FAIL → BUNDLE:integrity_fail. Surface. Continue (do not halt manager).
   RESULT:PASS → BUNDLE:manifest_verify.
-  TASK:[run_id].T1 | TYPE:INTEGRITY_CHECK | RESULT:[PASS|FAIL] | FILES:11
+  TASK:[run_id].T1 | TYPE:INTEGRITY_CHECK | RESULT:[PASS|FAIL] | FILES:[count from script output]
 
 ─────────────────────────────────────────────
 T2  SURFACE ESCALATIONS

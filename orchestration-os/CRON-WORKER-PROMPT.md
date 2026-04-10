@@ -58,7 +58,7 @@ T0  INTEGRITY CHECK
   Output is one line per file (PASS/FAIL/MISSING) plus a summary line.
   The script output is authoritative. Do not recompute hashes yourself.
 
-  RESULT:PASS → TASK:[run_id].T0 | TYPE:INTEGRITY_CHECK | RESULT:PASS | FILES:11
+  RESULT:PASS → TASK:[run_id].T0 | TYPE:INTEGRITY_CHECK | RESULT:PASS | FILES:[count from script output]
   RESULT:FAIL → execute BUNDLE:integrity_fail → HALT
          (BUNDLE:integrity_fail releases LOCK.md before halting. T9 does NOT run after integrity failure.)
 

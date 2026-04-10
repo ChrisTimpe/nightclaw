@@ -63,7 +63,7 @@ Next steps (in order):
      Then: bash scripts/resign.sh SOUL.md  (SOUL.md is protected — editing it without resigning causes T0 HALT)
   2. Update USER.md with your name, timezone, and any domain restrictions
      Then: bash scripts/resign.sh USER.md  (same reason)
-  3. Run: bash scripts/verify-integrity.sh — must show 11 passed, 0 failed before starting crons
+  3. Run: bash scripts/verify-integrity.sh — must show all passed, 0 failed before starting crons
   4. Run: bash scripts/validate.sh — must show 0 failed (pass count varies by environment; warnings are non-blocking)
   5. Create two crons per DEPLOY.md §Step 5
   6. Before first overnight: activate PA-001 and PA-002 in OPS-PREAPPROVAL.md,
