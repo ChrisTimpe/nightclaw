@@ -25,7 +25,11 @@ STARTUP — execute in this exact order before T0
        IF output contains STALE_HOLDER: prior session crashed before T9.
          Parse STALE_HOLDER, STALE_RUN, FAILURES from the output.
          Set consecutive_pass_failures = FAILURES + 1.
-         Append to audit/AUDIT-LOG.md: TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n]
+         Execute: python3 scripts/nightclaw-ops.py crash-context [STALE_RUN]
+         Parse the crash context output. Note PROJECT, LAST_OBJECTIVE, RECOMMENDATION.
+         Append to audit/AUDIT-LOG.md: TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n] | CRASHED_PROJECT:[project] | CRASHED_OBJECTIVE:[objective]
+         IF RECOMMENDATION=ESCALATE:
+           Append HIGH to NOTIFICATIONS.md: "Repeat crash on [project]. Objective: [objective]. Human review needed."
          IF consecutive_pass_failures >= 3: append MEDIUM to NOTIFICATIONS.md:
            "session:nightclaw-worker has failed [n] consecutive passes. Check logs for crash pattern."
          IF consecutive_pass_failures >= 5: append HIGH to NOTIFICATIONS.md:
@@ -72,12 +76,13 @@ T1  DISPATCH
   IDLE → go to T1.5.
 
 ─────────────────────────────────────────────
-T1.5  NOTIFICATIONS CHECK (runs ONLY when T1 found no active project)
+T1.5  NOTIFICATIONS CHECK + IDLE TRIAGE (runs ONLY when T1 found no active project)
 ─────────────────────────────────────────────
   This step is mandatory when T1 finds no dispatchable project. Do not skip it.
 
+  STEP A: Check notifications.
   Execute: python3 scripts/nightclaw-ops.py scan-notifications
-  Output: FOUND:line=<n>:<summary> entries, or NONE.
+  Output: FOUND:line=<n>:priority=<p>:<summary> entries, or NONE.
 
   FOUND at least one:
     Take the first (oldest) FOUND entry. Note the line number.
@@ -88,23 +93,42 @@ T1.5  NOTIFICATIONS CHECK (runs ONLY when T1 found no active project)
     Go to T9.
 
   NONE:
-    READ orchestration-os/OPS-IDLE-CYCLE.md → execute idle cycle
-    (includes Tier 4 autonomous proposal if TRANSITION-HOLD has been pending 2+ passes)
-    Go to T9.
+    STEP B: Determine idle cycle tier.
+    Execute: python3 scripts/nightclaw-ops.py idle-triage
+    Output: IDLE:TIER=<tier>:ACTION=<action> or IDLE:NONE.
+
+    The script checks all idle cycle tier prerequisites deterministically.
+    Do NOT read OPS-IDLE-CYCLE.md to determine which tier to execute.
+    The script output tells you exactly which tier has actionable work.
+
+    IDLE:TIER=<tier>:ACTION=<action>:
+      READ only the relevant tier section from OPS-IDLE-CYCLE.md for execution instructions.
+      Execute that tier's action. Go to T9.
+    IDLE:NONE:
+      Write one line to memory/YYYY-MM-DD.md:
+        "[IDLE CYCLE — timestamp] All tiers checked. No actionable work found. System current."
+      Go to T9.
 
 ─────────────────────────────────────────────
 T2  LONGRUNNER
 ─────────────────────────────────────────────
-  READ selected LONGRUNNER.md Resume Template section.
-  COMPLETE  → BUNDLE:phase_transition → T9
-  BLOCKED   → BUNDLE:route_block → back to T1 (max 2 re-routes)
-  EMPTY obj → BUNDLE:surface_escalation(stale-next-pass) → back to T1
-  ACTIVE    → continue
+  Execute: python3 scripts/nightclaw-ops.py longrunner-extract <slug>
+  The script extracts all routing-critical fields. Do not read the full LONGRUNNER file.
+  Parse the key=value output lines.
+
+  routing=COMPLETE  → BUNDLE:phase_transition → T9
+  routing=BLOCKED   → BUNDLE:route_block → back to T1 (max 2 re-routes)
+  routing=STALE_OBJECTIVE → BUNDLE:surface_escalation(stale-next-pass) → back to T1
+  routing=ACTIVE    → continue
+
+  READ the full LONGRUNNER.md ONLY at T4 if execution requires narrative context
+  (e.g., pass_output_criteria, decision log, open questions). The extracted fields
+  are sufficient for all routing decisions at T2, T2.5, T2.7, and T3.
 
 T2.5  MODEL + BUDGET
-  model_tier:     lightweight=fast | standard=default | heavy=best(MAX 2/5h window)
-  context_budget: read from next_pass.context_budget (default=80K if missing)
-  If heavy and memory shows 2 today → downgrade to standard.
+  model_tier:     from longrunner-extract output: next_pass.model_tier
+  context_budget: from longrunner-extract output: next_pass.context_budget (default=80K)
+  If model_tier=heavy and memory shows 2 heavy passes today → downgrade to standard.
 
 T2.7  AUTHORIZATION
   next_pass requires exec or extended write?
@@ -186,11 +210,17 @@ T7  OS IMPROVEMENT  (assessment mandatory — write only if gate passes)
                               behavior lesson   → d | quality insight    → e | registry gap    → f
   One sentence is sufficient. Dated. Do not interrupt T4 to write it — wait until T7.
 
-  GATE (answer both honestly before writing to any OS file):
-    G1: Is this finding non-obvious — not already documented in the target file?
-    G2: Is this finding generalizable — does it apply beyond this specific pass?
+  GATE:
+    G1: Is this finding generalizable — does it apply beyond this specific pass?
+         NO → skip to EITHER NO below.
+    G2: Dedup check — is it already documented?
+         Map your signal type to the target file (a–f below).
+         Execute: python3 scripts/nightclaw-ops.py t7-dedup <target-file> <signal summary>
+         Output: DUPLICATE:<entry_id>:<score>:<preview> or NOVEL
+         DUPLICATE → skip to EITHER NO below.
+         NOVEL → proceed to write.
 
-  BOTH YES → choose exactly one target and write it. Dated. Concrete.
+  BOTH PASS → choose exactly one target and write it. Dated. Concrete.
     a) Tool constraint   → orchestration-os/OPS-TOOL-REGISTRY.md
     b) Reusable artifact → orchestration-os/OPS-KNOWLEDGE-EXECUTION.md
     c) Failure mode      → orchestration-os/OPS-FAILURE-MODES.md FM-[next]
@@ -229,7 +259,7 @@ openclaw cron add \
   --name "nightclaw-worker-trigger" \
   --every 3h \
   --session "session:nightclaw-worker" \
-  --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
+  --message "READ orchestration-os/CRON-WORKER-PROMPT.md. Execute STARTUP through T9 exactly. No improvisation." \
   --light-context \
   --no-deliver \
   --model anthropic/claude-haiku-3-5
