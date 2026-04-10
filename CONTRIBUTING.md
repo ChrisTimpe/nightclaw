@@ -44,12 +44,12 @@ Thank you for your interest in contributing. NightClaw is an open-source orchest
 
 - Changes that introduce personal, employer-specific, or proprietary context
 - Features that require a specific LLM provider (the framework is model-agnostic)
-- Runtime code or daemons — NightClaw is a markdown-native orchestration framework, not a software application
+- Runtime code or daemons — governance executes through the agent's reasoning, not through a separate process. The system has no runtime layer to add to.
 - Changes to the core safety model (Hard Lines, append-only audit, integrity verification) without thorough justification
 
 ## Guidelines
 
-- **Keep it markdown.** NightClaw is a set of orchestration documents, not a codebase. Contributions should be markdown files or improvements to existing markdown files.
+- **Preserve the architecture.** NightClaw is a hybrid system: deterministic scripts that enforce hard bounds (integrity verification, structural validation, dependency pre-computation) and natural-language protocols the LLM reads and executes within those bounds. Both layers are load-bearing. Contributions should extend the protocols — new failure modes, schema additions to `REGISTRY.md`, field map extensions, protocol improvements — or improve the enforcement scripts. Do not add a separate execution layer; that would change the architecture.
 - **No credentials or real data.** Never include API keys, tokens, tenant names, real company names, or personal information in any contribution.
 - **Preserve placeholders.** All installer-substitutable values use `{PLACEHOLDER}` syntax. New placeholders should follow this convention and be documented in `INSTALL.md`.
 - **Respect the append-only principle.** Files marked append-only in `orchestration-os/REGISTRY.md` (audit logs, session registry, change log) should never have entries edited or deleted in examples or templates.
