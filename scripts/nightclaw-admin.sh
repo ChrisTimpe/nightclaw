@@ -276,7 +276,7 @@ cmd_alerts() {
     local scan_output
     scan_output=$(python3 scripts/nightclaw-ops.py scan-notifications 2>/dev/null || echo "ERROR")
 
-    if [[ "$scan_output" == "NONE" ]]; then
+    if [[ "$scan_output" == NONE* ]]; then
         echo -e "  ${DIM}No unresolved alerts.${NC}"
         echo ""
         return
