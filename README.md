@@ -51,7 +51,7 @@ This is not hypothetical. r/openclaw documented every one of these failure modes
 
 **The first SHA-256 pre-session behavioral integrity gate.**
 
-Before every cron session, before the LLM context is populated with a single token, a shell script running outside the LLM layer verifies SHA-256 hashes of 11 behavioral governance files against INTEGRITY-MANIFEST.md. Any drift — accidental edit, model-induced write, external modification — halts the session. Hard halt. Not a warning.
+Before every cron session, before the LLM context is populated with a single token, a shell script running outside the LLM layer verifies SHA-256 hashes of all behavioral governance files listed in INTEGRITY-MANIFEST.md. Any drift — accidental edit, model-induced write, external modification — halts the session. Hard halt. Not a warning.
 
 TPM pre-boot measurement chains have applied this principle to firmware since 2003. Before an OS loads, the TPM verifies the bootloader’s hash against a stored measurement. If anything changed, boot stops. The governed system does not run until the integrity of the layer governing it is confirmed. NightClaw applies the same pattern to behavioral governance files. The community discovered this need independently — `sha256sum` baseline scripts, nightly audit crons, manually maintained hash files. Advanced OpenClaw users were already building this from scratch. NightClaw formalizes it as a hard pre-session gate built into the framework itself. If the governance layer has drifted, the session does not start.
 
@@ -67,7 +67,7 @@ This is foreign key enforcement for a natural-language object model. In a relati
 
 **The first FMEA-structured failure knowledge base in an autonomous agent’s live execution context, compounding from production.**
 
-33 failure modes, structured as FMEA entries: detection signal, root cause, fix procedure, prevention. In the agent’s reasoning context before execution begins. Not an external error handler — a taxonomy the agent reads before it tries anything.
+A growing registry of failure modes, structured as FMEA entries: detection signal, root cause, fix procedure, prevention. In the agent’s reasoning context before execution begins. Not an external error handler — a taxonomy the agent reads before it tries anything. New entries are added during operation as they’re encountered.
 
 FMEA is how Boeing knows what to do when a hydraulic line fails mid-flight. You do not troubleshoot a 737 from first principles at 35,000 feet. You consult the classified failure taxonomy, follow the documented procedure, the system continues operating. The insight NightClaw applies is not FMEA itself — it is placing FMEA in the executor’s context so the executor diagnoses failure class before attempting recovery, not after being blocked by an external handler that cannot explain why. And it compounds: novel failures discovered in production are appended at T7d, so the knowledge base grows from the agent’s own runs. Every session that hits a new wall and recovers makes every subsequent session more capable of classifying that failure. The executed, in-context, self-compounding version ships in NightClaw v0.1.0.
 
@@ -129,7 +129,7 @@ Concretely, OpenClaw ships with cron scheduling and LLM sessions. There is no na
 - Manager review pass that surfaces direction problems before they compound
 
 **Self-healing execution loop:**
-- 33 indexed failure modes structured as FMEA entries — detection signal, root cause, fix procedure, prevention. Agent diagnoses before retrying, not after.
+- A continuously growing failure mode registry structured as FMEA entries — detection signal, root cause, fix procedure, prevention. Agent diagnoses before retrying, not after.
 - Blocker decision tree: known failure mode → apply fix; pre-approved → act; partial completion possible → continue; none of the above → surface proposal, re-route. Designed to never halt on recoverable blockers — integrity failures halt by design.
 - Novel blockers appended as new failure modes at T7d — the knowledge base grows from production experience so the same wall is never hit twice
 - Quality gate (three-question test) preventing low-value output from being marked complete
@@ -357,7 +357,7 @@ SECURITY.md                Vulnerability reporting policy
 
 ```
 AUDIT-LOG.md               Append-only action log
-INTEGRITY-MANIFEST.md      SHA-256 drift detection for 11 core framework files
+INTEGRITY-MANIFEST.md      SHA-256 drift detection for all protected framework files
 APPROVAL-CHAIN.md          Pre-approval invocation chain with scope verification
 SESSION-REGISTRY.md        Per-session run record with token tracking
 CHANGE-LOG.md              Field-level state change log
@@ -376,7 +376,7 @@ OPS-CRON-SETUP.md          Cron configuration, cadence tuning, setup checklist
 OPS-AUTONOMOUS-SAFETY.md   Behavioral discipline contract + blocker decision tree (self-healing core)
 OPS-PREAPPROVAL.md         Pre-authorize action classes for overnight runs
 OPS-QUALITY-STANDARD.md    Three-question quality test + four-question value methodology
-OPS-FAILURE-MODES.md       33 indexed failure modes — diagnose before retrying
+OPS-FAILURE-MODES.md       Indexed failure mode registry (growing) — diagnose before retrying
 OPS-KNOWLEDGE-EXECUTION.md Part 2: skill layer — field maps + script templates (replaceable; add your own systems)
 OPS-TOOL-REGISTRY.md       Tool constraint knowledge
 OPS-IDLE-CYCLE.md          Ranked autonomous work when no active project
@@ -396,7 +396,7 @@ scripts/resign.sh           Re-signs all protected files after manual edits (upd
 scripts/upgrade.sh          Merges updated NightClaw files into an existing workspace without data loss
 scripts/new-project.sh      Scaffolds a new LONGRUNNER project directory from template
 scripts/check-lock.py       Diagnostic — prints current LOCK.md state (manual use only; exec-blocked in cron)
-scripts/smoke-test.sh       First-run smoke test — 18 checks simulating a full new user setup in an isolated temp directory
+scripts/smoke-test.sh       First-run smoke test simulating a full new user setup in an isolated temp directory
 ```
 
 ### PROJECTS/
@@ -477,7 +477,7 @@ Most of what NightClaw applies are known engineering patterns applied in a new c
 When the agent writes any file, PW-2 runs `grep` against the R4 dependency graph in `REGISTRY.md`. The agent receives a computed list of downstream dependents — it does not reason about what might be affected. An LLM reasoning about implicit downstream effects is unreliable and context-sensitive; it degrades as session context grows and produces silent drift when it misses an edge. A `grep` of a declared graph is reliable and context-free for every edge that has been declared. Cascade integrity holds not because the model is trusted to know the dependencies, but because the dependencies are declared and computed deterministically — for every edge that has been declared. Missing edges produce drift that is silent for the same reason a missing foreign key is silent: the schema doesn’t know what it doesn’t declare. The improvement in reliability is categorical for the declared graph.
 
 **2. The governance layer is cryptographically protected from the system it governs.**
-Every prompt-based governance approach shares a fundamental weakness: the model can modify or ignore its own behavioral constraints if a session drifts, a prompt injection succeeds, or the model reasons past them. There is no hard stop. NightClaw's answer: SHA-256 hash the 11 behavioral governance files. Before any cron session does anything meaningful, `verify-integrity.sh` checks all 11. Mismatch → session halts before the LLM context is even populated. This is enforced by a shell script running outside the LLM layer — not by prompting the LLM to respect its own constraints. A governance layer that can verify its own integrity using a mechanism that exists outside itself is structurally different from one that relies on the model's compliance.
+Every prompt-based governance approach shares a fundamental weakness: the model can modify or ignore its own behavioral constraints if a session drifts, a prompt injection succeeds, or the model reasons past them. There is no hard stop. NightClaw's answer: SHA-256 hash all behavioral governance files listed in INTEGRITY-MANIFEST.md. Before any cron session does anything meaningful, `verify-integrity.sh` checks every one. Mismatch → session halts before the LLM context is even populated. This is enforced by a shell script running outside the LLM layer — not by prompting the LLM to respect its own constraints. A governance layer that can verify its own integrity using a mechanism that exists outside itself is structurally different from one that relies on the model's compliance.
 
 **3. Completion is asserted, not judged.**
 Every LLM task system that relies on the model to declare a task complete produces the same failure mode: the model believes it is done when it isn't, and the failure is silent. "Approximately done" and "done" are indistinguishable from outside. A LONGRUNNER `stop_condition` is a machine-testable assertion — a verifiable check, not a judgment. An assertion either passes or it doesn't. For multi-session autonomous work spanning days, the compounding effect of silent non-completion is severe. Verifiable stop conditions eliminate the failure mode, not just reduce it.
@@ -531,7 +531,7 @@ None of these patterns are novel in isolation — they are proven systems engine
 │  R1 Objects  R2 Fields  R3 Write routing  R4 Dependencies   │
 │  R5 Bundles  R6 Self-consistency rules  R7 Change-log format │
 ├──────────────────────────────────────────────────────────────┤
-│                    audit/ (5 files)                          │
+│                    audit/                                    │
 │  AUDIT-LOG  SESSION-REGISTRY  CHANGE-LOG                    │
 │  INTEGRITY-MANIFEST (drift detection)  APPROVAL-CHAIN       │
 ├──────────────────────────────────────────────────────────────┤

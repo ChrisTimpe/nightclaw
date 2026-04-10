@@ -118,7 +118,7 @@ bash scripts/resign.sh SOUL.md
 bash scripts/resign.sh USER.md
 bash scripts/resign.sh orchestration-os/OPS-PREAPPROVAL.md
 
-# Confirm all 11 pass before starting crons
+# Confirm all pass before starting crons
 bash scripts/verify-integrity.sh
 ```
 
@@ -157,7 +157,7 @@ bash scripts/smoke-test.sh /path/to/nightclaw-v0.1.0-release-FINAL.zip
 
 The smoke test simulates a new user's complete setup in an isolated temp directory —
 extract, install, Domain Anchor edit + resign, USER.md edit + resign, PA activation + resign,
-validate.sh, new-project creation, and T0 hash simulation. All 18 checks must pass before
+validate.sh, new-project creation, and T0 hash simulation. All checks must pass before
 starting crons. If any check fails, the output names exactly which step failed and why.
 
 ---

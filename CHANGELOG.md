@@ -22,9 +22,9 @@ First public release. All development hardening from internal versions v0.001 an
 ### What's included
 - Complete autonomous overnight orchestration framework for OpenClaw
 - LONGRUNNER project lifecycle with phase transitions and human approval gates
-- SHA-256 integrity manifest with 11 protected files
+- SHA-256 integrity manifest covering all protected governance files
 - Session lock protocol with stale detection and orphan guard
-- 33 indexed failure modes with behavioral prevention
+- Indexed failure mode registry (continuously growing) with behavioral prevention
 - Pre-approval system (PA-001, PA-002) for overnight autonomy
 - Morning-check workflow via NOTIFICATIONS.md
 - Self-healing audit trail (AUDIT-LOG, SESSION-REGISTRY, CHANGE-LOG)
@@ -69,9 +69,9 @@ First public release. All development hardening from internal versions v0.001 an
 ### Orchestration Framework (Part 1)
 
 - Append-only audit trail: AUDIT-LOG, SESSION-REGISTRY, CHANGE-LOG, APPROVAL-CHAIN
-- SHA-256 integrity manifest covering 11 protected files — session-level drift detection
+- SHA-256 integrity manifest covering all protected governance files — session-level drift detection
 - LONGRUNNER project lifecycle — explicit pass boundaries, stop conditions, phase history, retry state
-- 32 indexed failure modes with root cause, detection signal, fix, and prevention
+- Indexed failure mode registry with root cause, detection signal, fix, and prevention (grows during operation)
 - Self-healing blocker decision tree — diagnose before retrying, never halt on recoverable blockers (integrity failures halt by design)
 - Session lock (LOCK.md) — mutex preventing concurrent worker/manager cron overlap
 - T7 OS Improvement Gate — G1 (non-obvious) + G2 (generalizable) gate before any OS file write

@@ -78,7 +78,7 @@ If you ran install.sh, verify it completed successfully:
 bash scripts/verify-integrity.sh
 ```
 
-All 11 protected files should show `PASS`. If any show `FAIL`, re-run `install.sh` or
+All protected files should show `PASS`. If any show `FAIL`, re-run `install.sh` or
 manually run `bash scripts/resign.sh` to regenerate the manifest.
 
 This is the only step that requires your direct involvement — the agent handles everything
