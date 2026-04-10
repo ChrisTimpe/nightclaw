@@ -1,17 +1,7 @@
 # HEARTBEAT.md
-
-## Cron Trigger Handling — Check This First
-<!-- Injected on EVERY main session AND every heartbeat run. Keep lean. -->
-
-If the system event contains `WORKER_PASS_DUE`:
-  Read `orchestration-os/CRON-WORKER-PROMPT.md` and execute the full worker pass. Stop after.
-
-If the system event contains `MANAGER_PASS_DUE`:
-  Read `orchestration-os/CRON-MANAGER-PROMPT.md` and execute the full manager pass. Stop after.
-
-If this is a routine heartbeat: continue with checks below.
-
----
+<!-- Injected on every heartbeat run. Keep lean. -->
+<!-- Cron passes (worker/manager) run in their own dedicated sessions via `openclaw cron`. -->
+<!-- This file handles ONLY lightweight heartbeat checks — never full cron passes. -->
 
 ## Heartbeat Checks (lightweight — no heavy searches)
 
