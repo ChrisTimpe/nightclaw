@@ -91,7 +91,28 @@ T1  DISPATCH
   Rows with escalation_pending=surfaced-* have already been surfaced to {OWNER} — worker proceeds with them.
   Rows with status=TRANSITION-HOLD: skip. These are awaiting {OWNER} direction.
   Rows with any other non-none escalation_pending value: skip (pending human response).
-  NONE found → READ orchestration-os/OPS-IDLE-CYCLE.md → execute idle cycle (includes Tier 4 autonomous proposal if TRANSITION-HOLD has been pending 2+ passes) → T9.
+  NONE found → go to T1.5.
+
+─────────────────────────────────────────────
+T1.5  NOTIFICATIONS CHECK (runs ONLY when T1 found no active project)
+─────────────────────────────────────────────
+  This step is mandatory when T1 finds no dispatchable project. Do not skip it.
+
+  READ NOTIFICATIONS.md top to bottom.
+  SCAN for entries targeting Worker. Actionable tags:
+    WORKER-ACTION-REQUIRED, PENDING-LESSON, AUDIT-FLAG, SESSION-SUMMARY
+
+  FOUND at least one actionable entry:
+    SELECT the oldest actionable entry.
+    Execute it as this pass's objective.
+    Log: TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:notifications | OBJECTIVE:[one-line summary of entry]
+    After execution, mark the entry DONE in NOTIFICATIONS.md (prepend [DONE] to the line).
+    Go to T9.
+
+  NONE found (no actionable entries, or NOTIFICATIONS.md is empty):
+    READ orchestration-os/OPS-IDLE-CYCLE.md → execute idle cycle
+    (includes Tier 4 autonomous proposal if TRANSITION-HOLD has been pending 2+ passes)
+    Go to T9.
 
 ─────────────────────────────────────────────
 T2  LONGRUNNER
@@ -119,7 +140,7 @@ T3  TOOL CHECK
 [BLOCKER PROTOCOL — applies at T2, T2.7, T3]
   BUNDLE:route_block → re-read ACTIVE-PROJECTS → find next ACTIVE+none escalation.
   FOUND → T2 for new project. Max 2 re-routes.
-  NOT FOUND → OPS-IDLE-CYCLE → T9. Never halt entirely.
+  NOT FOUND → T1.5. Never halt entirely.
 
 [TIER 2B — load ONLY if T4 will write control-plane files]
   Control-plane = files outside PROJECTS/[slug]/ and audit/ appends.
@@ -205,7 +226,7 @@ T7  OS IMPROVEMENT  (assessment mandatory — write only if gate passes)
 ─────────────────────────────────────────────
 T9  SESSION CLOSE  ← MANDATORY. Always execute. No exceptions.
 ─────────────────────────────────────────────
-  T9 runs after EVERY pass — after project work, after idle cycle.
+  T9 runs after EVERY pass — after project work, after idle cycle, after notifications work.
   It is never optional. If you are about to stop without executing T9: stop, execute T9 first.
   Exception: integrity failure at T0 halts via BUNDLE:integrity_fail (which releases LOCK.md) — T9 does not run.
 

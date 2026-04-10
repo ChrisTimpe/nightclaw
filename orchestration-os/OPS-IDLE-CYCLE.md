@@ -2,6 +2,24 @@
 <!-- Read when: ACTIVE-PROJECTS.md has no actionable rows (all paused, blocked, or transition-hold) -->
 <!-- Purpose: turn idle cron cycles into compounding value instead of wasted tokens -->
 
+## Pre-check: NOTIFICATIONS.md (mandatory before entering ladder)
+
+Before executing any tier below, READ NOTIFICATIONS.md.
+Scan for entries targeting Worker. Actionable tags:
+  WORKER-ACTION-REQUIRED, PENDING-LESSON, AUDIT-FLAG, SESSION-SUMMARY
+
+FOUND at least one actionable entry:
+  SELECT the oldest actionable entry.
+  Execute it as this pass's objective.
+  Log: TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:notifications | OBJECTIVE:[one-line summary]
+  After execution, mark the entry DONE in NOTIFICATIONS.md (prepend [DONE] to the line).
+  RETURN to caller (T1.5 or BLOCKER PROTOCOL). Do NOT enter the priority ladder below.
+
+NONE found (no actionable entries, or NOTIFICATIONS.md is empty):
+  Proceed to the priority ladder below.
+
+---
+
 ## The Rule
 
 An idle cycle is not a failed cycle. It is a cycle with no active project work — which means it is available for autonomous OS improvement. The system runs nonstop. When project work pauses, the OS improves.

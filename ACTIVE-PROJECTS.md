@@ -29,7 +29,7 @@ The orchestrator reads this table and applies these rules in order:
 2. **Check escalation:** If `Escalation Pending` is not `none`, surface it to {OWNER} before doing any worker work
 3. **Route to highest priority active project** that has a worker pass due
 4. **If highest-priority project is blocked:** note the block, route to next priority
-5. **If all projects are blocked or complete:** report status, do not spin idle
+5. **If all projects are blocked or complete:** enter idle cycle (T1.5 → OPS-IDLE-CYCLE.md)
 
 ### When to Skip a Project
 

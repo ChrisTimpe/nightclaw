@@ -1,5 +1,7 @@
 # NOTIFICATIONS.md
-<!-- APPEND-ONLY. Escalation surface for both sessions. Agents append; {OWNER} reads. -->
+<!-- APPEND-ONLY. Escalation surface for both sessions. Agents append; {OWNER} and Worker read. -->
+<!-- Worker reads this file at T1.5 (idle dispatch) and actions entries tagged for it. -->
+<!-- Actionable worker tags: WORKER-ACTION-REQUIRED, PENDING-LESSON, AUDIT-FLAG, SESSION-SUMMARY -->
 <!-- Archival: {OWNER} manually moves resolved entries to NOTIFICATIONS-ARCHIVE.md as needed. -->
 <!-- NOTIFICATIONS-ARCHIVE.md does not ship with NightClaw. Create it when you first archive entries. -->
 <!-- There is no automated archival. Review and prune this file at your own cadence. -->

@@ -35,7 +35,8 @@ OBJ:MANIFEST    | audit/INTEGRITY-MANIFEST.md                 | filepath     | w
 OBJ:PA          | orchestration-os/OPS-PREAPPROVAL.md         | PA-NNN       | worker:T2.7          | {OWNER}                     | NO
 OBJ:CHAIN       | audit/APPROVAL-CHAIN.md                     | PA-NNN-INV-NNN | manager:T8         | worker:T2.7               | YES
 OBJ:FM          | orchestration-os/OPS-FAILURE-MODES.md       | FM-NNN(seq)  | -                    | worker:T7c                | NO
-OBJ:NOTIFY      | NOTIFICATIONS.md                            | none         | manager:T2,{OWNER}     | worker:bundles,manager     | YES
+OBJ:NOTIFY      | NOTIFICATIONS.md                            | none         | manager:T2,worker:T1.5,{OWNER} | worker:bundles,manager     | YES
+OBJ:NOTIFY-ARCH | NOTIFICATIONS-ARCHIVE.md                    | none         | {OWNER}                         | manager:T8.3               | YES
 OBJ:MEMORY      | memory/YYYY-MM-DD.md                        | none         | manager:T4           | worker:T9,manager:T9      | YES
 OBJ:REGISTRY    | PROJECTS/MANAGER-REVIEW-REGISTRY.md         | slug+date    | manager:T3           | manager:T7                | NO
 OBJ:TOOLREG     | orchestration-os/OPS-TOOL-REGISTRY.md       | tool+date    | -                    | worker:T7a                | NO
@@ -103,7 +104,9 @@ ACTIVE-PROJECTS.md(block)         | STANDARD        | BUNDLE:route_block        
 ACTIVE-PROJECTS.md(transition)    | STANDARD        | BUNDLE:phase_transition   | Phase complete
 ACTIVE-PROJECTS.md(escalation)    | STANDARD        | BUNDLE:surface_escalation | Surfacing to {OWNER}
 PROJECTS/*/LONGRUNNER.md          | STANDARD        | BUNDLE:longrunner_update  | Always via bundle, never raw
-NOTIFICATIONS.md                  | APPEND          | BUNDLE:surface_escalation | Always via bundle
+NOTIFICATIONS.md(append)          | APPEND          | BUNDLE:surface_escalation | New entries always via bundle
+NOTIFICATIONS.md(prune)           | STANDARD        | standalone                | Manager T8.3 only — move resolved/stale entries to archive
+NOTIFICATIONS-ARCHIVE.md          | APPEND          | standalone                | Manager T8.3 only — receives pruned entries verbatim
 audit/AUDIT-LOG.md                | APPEND          | inline                    | Every step writes its own entry
 audit/SESSION-REGISTRY.md         | APPEND          | BUNDLE:session_close      | T9 only
 audit/CHANGE-LOG.md               | APPEND          | inline                    | Immediately after each field change in T4
@@ -163,6 +166,8 @@ BUNDLE:surface_escalation → WRITES → ACTIVE-PROJECTS.md
 BUNDLE:surface_escalation → WRITES → audit/AUDIT-LOG.md
 BUNDLE:integrity_fail    → WRITES  → NOTIFICATIONS.md
 BUNDLE:integrity_fail    → WRITES  → audit/AUDIT-LOG.md
+NOTIFICATIONS.md          → READS   → worker:T1.5 (idle dispatch — worker scans for actionable entries)
+NOTIFICATIONS.md          → WRITES  → NOTIFICATIONS-ARCHIVE.md (manager T8.3 prune — moves resolved/stale entries)
 BUNDLE:integrity_fail    → WRITES  → LOCK.md (release — releases lock before halting)
 BUNDLE:pa_invoke         → WRITES  → audit/APPROVAL-CHAIN.md
 BUNDLE:pa_invoke         → WRITES  → audit/AUDIT-LOG.md
