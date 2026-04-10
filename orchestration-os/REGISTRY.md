@@ -26,8 +26,9 @@
 # Every object type: what it is, where it lives, who reads it, who writes it.
 # Format: OBJ | FILE | PK | READER | WRITER | APPEND-ONLY
 
-OBJ:DISPATCH    | ACTIVE-PROJECTS.md                          | slug         | worker:T1,manager:T2 | worker:bundles,manager:T6 | NO
-OBJ:PROJ        | PROJECTS/[slug]/LONGRUNNER.md               | singleton    | worker:T2            | worker:bundles            | NO
+OBJ:DISPATCH    | ACTIVE-PROJECTS.md                          | slug         | worker:T1,manager:T2/T3/T3.5 | worker:bundles,manager:T6 | NO
+OBJ:PROJ        | PROJECTS/[slug]/LONGRUNNER.md               | singleton    | worker:T2,manager:T3.5 | worker:bundles            | NO
+OBJ:PROJ-DRAFT  | PROJECTS/[slug]/LONGRUNNER-DRAFT.md          | singleton    | manager:T3.5         | worker:idle-cycle(Tier4)  | NO
 OBJ:RUN         | audit/SESSION-REGISTRY.md                   | RUN-YYYYMMDD-NNN | worker:startup,manager:T0 | worker:T9,manager:T9 | YES
 OBJ:TASK        | audit/AUDIT-LOG.md                          | RUN-ID.Tstep | manager:T8           | worker:T0/T4/T9,manager:T1/T8/T9 | YES
 OBJ:CHANGELOG   | audit/CHANGE-LOG.md                         | none         | manager:T8           | worker:T4                 | YES
@@ -35,9 +36,9 @@ OBJ:MANIFEST    | audit/INTEGRITY-MANIFEST.md                 | filepath     | w
 OBJ:PA          | orchestration-os/OPS-PREAPPROVAL.md         | PA-NNN       | worker:T2.7          | {OWNER}                     | NO
 OBJ:CHAIN       | audit/APPROVAL-CHAIN.md                     | PA-NNN-INV-NNN | manager:T8         | worker:T2.7               | YES
 OBJ:FM          | orchestration-os/OPS-FAILURE-MODES.md       | FM-NNN(seq)  | -                    | worker:T7c                | NO
-OBJ:NOTIFY      | NOTIFICATIONS.md                            | none         | manager:T2,worker:T1.5,{OWNER} | worker:bundles,manager     | YES
+OBJ:NOTIFY      | NOTIFICATIONS.md                            | none         | manager:T2/T3.5,worker:T1.5,{OWNER} | worker:bundles,manager | YES
 OBJ:NOTIFY-ARCH | NOTIFICATIONS-ARCHIVE.md                    | none         | {OWNER}                         | manager:T8.3               | YES
-OBJ:MEMORY      | memory/YYYY-MM-DD.md                        | none         | manager:T4           | worker:T9,manager:T9      | YES
+OBJ:MEMORY      | memory/YYYY-MM-DD.md                        | none         | manager:T4,manager:T3.5 | worker:T9,manager:T3/T3.5/T9 | YES
 OBJ:REGISTRY    | PROJECTS/MANAGER-REVIEW-REGISTRY.md         | slug+date    | manager:T3           | manager:T7                | NO
 OBJ:TOOLREG     | orchestration-os/OPS-TOOL-REGISTRY.md       | tool+date    | -                    | worker:T7a                | NO
 OBJ:LESSONS     | AGENTS-LESSONS.md                           | none         | agent:on-demand      | worker:T7d                | YES
@@ -104,7 +105,8 @@ ACTIVE-PROJECTS.md(block)         | STANDARD        | BUNDLE:route_block        
 ACTIVE-PROJECTS.md(transition)    | STANDARD        | BUNDLE:phase_transition   | Phase complete
 ACTIVE-PROJECTS.md(escalation)    | STANDARD        | BUNDLE:surface_escalation | Surfacing to {OWNER}
 PROJECTS/*/LONGRUNNER.md          | STANDARD        | BUNDLE:longrunner_update  | Always via bundle, never raw
-NOTIFICATIONS.md(append)          | APPEND          | BUNDLE:surface_escalation | New entries always via bundle
+PROJECTS/*/LONGRUNNER-DRAFT.md    | STANDARD        | standalone                | Worker idle-cycle Tier 4 writes; manager T3.5 reads; {OWNER} renames to LONGRUNNER.md on approval
+NOTIFICATIONS.md(append)          | APPEND          | standalone                | Manager appends at STARTUP/T0/T2/T3.5/T4/T8; worker via BUNDLE:surface_escalation
 NOTIFICATIONS.md(prune)           | STANDARD        | standalone                | Manager T8.3 only — move resolved/stale entries to archive
 NOTIFICATIONS-ARCHIVE.md          | APPEND          | standalone                | Manager T8.3 only — receives pruned entries verbatim
 audit/AUDIT-LOG.md                | APPEND          | inline                    | Every step writes its own entry
@@ -112,7 +114,7 @@ audit/SESSION-REGISTRY.md         | APPEND          | BUNDLE:session_close      
 audit/CHANGE-LOG.md               | APPEND          | inline                    | Immediately after each field change in T4
 audit/APPROVAL-CHAIN.md           | APPEND          | BUNDLE:pa_invoke          | T2.7 only
 audit/INTEGRITY-MANIFEST.md       | MANIFEST-VERIFY | BUNDLE:manifest_verify    | Manager: timestamps only. {OWNER}: hashes.
-memory/YYYY-MM-DD.md              | APPEND          | BUNDLE:session_close      | T9 only
+memory/YYYY-MM-DD.md              | APPEND          | BUNDLE:session_close,inline | T9 via bundle; manager T3/T3.5 inline one-liners; worker idle-cycle inline
 PROJECTS/MANAGER-REVIEW-REGISTRY.md | STANDARD      | standalone                | Manager T7 only
 orchestration-os/OPS-TOOL-REGISTRY.md | STANDARD    | standalone                | Worker T7a only
 AGENTS.md                         | STANDARD        | standalone                | Navigation index — auto-injected by OpenClaw. {OWNER} edits only. Do not write behavioral content here.
@@ -144,6 +146,7 @@ orchestration-os/CRON-HARDLINES.md      | PROTECTED  | none                     
 # Read reverse (grep TARGET) to find what depends on a file.
 
 ACTIVE-PROJECTS.md    → READS      → PROJECTS/*/LONGRUNNER.md
+ACTIVE-PROJECTS.md    → READS      → PROJECTS/*/LONGRUNNER-DRAFT.md (manager T3.5 — search for pending drafts)
 ACTIVE-PROJECTS.md    → TRIGGERS   → BUNDLE:longrunner_update
 ACTIVE-PROJECTS.md    → TRIGGERS   → BUNDLE:phase_transition
 ACTIVE-PROJECTS.md    → TRIGGERS   → BUNDLE:route_block
@@ -168,6 +171,8 @@ BUNDLE:integrity_fail    → WRITES  → NOTIFICATIONS.md
 BUNDLE:integrity_fail    → WRITES  → audit/AUDIT-LOG.md
 NOTIFICATIONS.md          → READS   → worker:T1.5 (idle dispatch — worker scans for actionable entries)
 NOTIFICATIONS.md          → WRITES  → NOTIFICATIONS-ARCHIVE.md (manager T8.3 prune — moves resolved/stale entries)
+PROJECTS/*/LONGRUNNER-DRAFT.md → READS → SOUL.md (manager T3.5-A — domain anchor alignment check)
+PROJECTS/*/LONGRUNNER-DRAFT.md → READS → USER.md (manager T3.5-A — constraint validation)
 BUNDLE:integrity_fail    → WRITES  → LOCK.md (release — releases lock before halting)
 BUNDLE:pa_invoke         → WRITES  → audit/APPROVAL-CHAIN.md
 BUNDLE:pa_invoke         → WRITES  → audit/AUDIT-LOG.md

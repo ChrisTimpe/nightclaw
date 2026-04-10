@@ -139,10 +139,76 @@ T2  SURFACE ESCALATIONS
 ─────────────────────────────────────────────
 T3  CHANGE DETECTION
 ─────────────────────────────────────────────
-  READ PROJECTS/MANAGER-REVIEW-REGISTRY.md.
-  Compare ACTIVE-PROJECTS.md last_worker_pass vs registry last_review_date.
-  No new activity → memory one-liner. Go to T8.
-  New activity → T4.
+  READ ACTIVE-PROJECTS.md.
+  Count rows where status = active.
+
+  IF 0 active projects → go to T3.5 (STRATEGIC DIRECTION).
+  IF active projects exist:
+    READ PROJECTS/MANAGER-REVIEW-REGISTRY.md.
+    Compare ACTIVE-PROJECTS.md last_worker_pass vs registry last_review_date.
+    No new activity → memory one-liner. Go to T8.
+    New activity → T4.
+
+─────────────────────────────────────────────
+T3.5  STRATEGIC DIRECTION (idle state only)
+─────────────────────────────────────────────
+  This is the manager's highest-value work. When no projects are active,
+  the manager is the strategic brain that sets direction for the worker.
+  The worker proposes projects (OPS-IDLE-CYCLE Tier 4). The manager
+  evaluates, refines, and approves them — or proposes its own.
+
+  Execute in order. Stop after the first action that produces output.
+
+  A. PENDING DRAFTS — check for worker-proposed projects awaiting review.
+     Search PROJECTS/*/LONGRUNNER-DRAFT.md for any existing drafts.
+     IF found:
+       READ the draft. READ SOUL.md Domain Anchor. READ USER.md constraints.
+       Evaluate: Is this aligned with domain focus? Is scope realistic for
+       the worker model? Is the stop condition machine-testable?
+       IF strong draft:
+         APPEND to NOTIFICATIONS.md (standalone, not via bundle) as HIGH:
+           "Manager recommends approving [slug]. Aligned with domain anchor.
+           Stop condition is testable. Ready for worker execution.
+           To approve: rename LONGRUNNER-DRAFT.md → LONGRUNNER.md, add row
+           to ACTIVE-PROJECTS.md, worker picks up on next pass."
+       IF weak draft:
+         APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
+           "Manager reviewed [slug] draft. Issues: [list]. Recommend revisions
+           before approval. Worker will revise on next idle cycle if directed."
+       Go to T8.
+
+  B. COMPLETED PROJECT REVIEW — learn from what just finished.
+     Search ACTIVE-PROJECTS.md for rows where status = complete.
+     IF any project completed in the last 30 days:
+       READ its LONGRUNNER.md — review outcomes, phases completed, lessons.
+       READ recent memory/ entries related to this project.
+       APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
+         "[slug] completed. Key outcomes: [summary]. Suggested follow-on
+         directions: [2-3 concrete next project ideas derived from findings].
+         Worker will propose a draft if no direction given within 48 hours."
+       Go to T8.
+
+  C. DOMAIN ANCHOR REVIEW — is the strategic direction still right?
+     READ SOUL.md Domain Anchor.
+     READ USER.md for any updated constraints or interests.
+     READ the last 5 memory/ entries for patterns in what the system has been doing.
+     IF the domain anchor is stale, too broad, or misaligned with recent work:
+       APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
+         "Manager recommendation: Domain Anchor in SOUL.md may benefit from
+         refinement. Current: [quote]. Observation: [what's changed]. Suggested
+         update: [concrete revision]. This shapes all future project proposals."
+     IF the domain anchor is current and well-scoped:
+       Identify the highest-value next project direction not yet proposed.
+       APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
+         "Strategic direction: next project should focus on [area]. Rationale:
+         [why this follows from domain anchor + completed work]. Worker will
+         pick this up as a Tier 4 proposal on next idle cycle."
+     Go to T8.
+
+  D. NONE OF THE ABOVE — no drafts, no recent completions, anchor is current.
+     APPEND one-liner to memory/YYYY-MM-DD.md (inline, not via bundle):
+       "[T3.5] System idle. No strategic action needed."
+     Go to T8.
 
 ─────────────────────────────────────────────
 T4  VALUE CHECK
