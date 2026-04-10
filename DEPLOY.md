@@ -288,7 +288,7 @@ Do the same each morning when you change the PAs back to INACTIVE.
 That’s it. With both active:
 - Worker auto-advances phases to TRANSITION-HOLD when stop conditions are met
 - Idle cycle drafts new project proposals from your Domain Anchor when all projects are blocked
-- System never halts — always finds something valuable to do
+- System never halts on recoverable blockers — always finds something valuable to do (integrity failures halt by design)
 
 In the morning, change both back to `INACTIVE`, then re-sign:
 ```bash

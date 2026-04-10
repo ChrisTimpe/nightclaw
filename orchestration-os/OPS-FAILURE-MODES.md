@@ -734,6 +734,31 @@ openclaw --version
 
 ---
 
+### FM-034
+**Name:** http-429-external-data-source
+
+**Symptom:** API calls to external data sources (SEC EDGAR, CMS NPPES, BLS, Census, or similar government/public APIs) return HTTP 429 Too Many Requests. Pass may appear to succeed but with incomplete data, or may fail mid-T4 with a timeout or connection error.
+
+**Root cause:** External API rate limits exceeded — either too many requests within a single pass, or cumulative requests across rapid successive passes against the same endpoint.
+
+**Detection signal:** Tool call output or exec logs contain "429", "rate limit", "too many requests", or "retry-after"; or a data fetch returns fewer records than expected with no other error. Distinguish from FM-033 (model API rate limit) by the source: FM-033 is the LLM provider; FM-034 is a downstream data API.
+
+**Fix:**
+1. Check response headers for `Retry-After` or `X-RateLimit-Reset` if available; note the reset time in LONGRUNNER `last_pass.notes`
+2. Save partial results already fetched to an output file before stopping the fetch loop
+3. Set `next_pass.objective` to continue from the last successfully fetched checkpoint (e.g., last ticker, last page, last date offset)
+4. Add a `time.sleep(1)` (or per-API documented minimum) between requests in any fetch loop — government APIs commonly require ≥1 second between requests
+5. Do NOT retry the failed request immediately in the same pass — this triggers longer bans on many public APIs
+6. Exit via T9 normally; the 60-minute cron gap is generally sufficient for public API rate limit resets
+
+**Prevention:** For any pass that fetches from external APIs in a loop, add a delay between requests from the start. Prefer paginated/batched calls over individual-record calls. If rate limits recur on multiple consecutive passes against the same API, reduce fetch batch size and add a note to the LONGRUNNER `notes` field.
+
+**Status:** ACTIVE
+**Added:** 2026-04-10
+**Source:** Cycle 1 operational review
+
+---
+
 ## Registry Maintenance
 
 ### How to Add a New Failure Mode
@@ -815,3 +840,4 @@ resolution_note: "Brief description of the systemic fix that makes this impossib
 | FM-031 | manager-first-run-audit-log-overwrite | MITIGATED |
 | FM-032 | manager-notifications-overwrite-degraded | MITIGATED |
 | FM-033 | model-api-rate-limit | ACTIVE |
+| FM-034 | http-429-external-data-source | ACTIVE |

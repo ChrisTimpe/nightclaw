@@ -72,7 +72,7 @@ First public release. All development hardening from internal versions v0.001 an
 - SHA-256 integrity manifest covering 11 protected files — session-level drift detection
 - LONGRUNNER project lifecycle — explicit pass boundaries, stop conditions, phase history, retry state
 - 32 indexed failure modes with root cause, detection signal, fix, and prevention
-- Self-healing blocker decision tree — diagnose before retrying, never halt
+- Self-healing blocker decision tree — diagnose before retrying, never halt on recoverable blockers (integrity failures halt by design)
 - Session lock (LOCK.md) — mutex preventing concurrent worker/manager cron overlap
 - T7 OS Improvement Gate — G1 (non-obvious) + G2 (generalizable) gate before any OS file write
 - TRANSITION-HOLD timeout — 3-day default, CRITICAL re-escalation × 3, then auto-pause
