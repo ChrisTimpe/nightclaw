@@ -141,7 +141,7 @@ done
 # --- Check 6: Scripts are executable ---
 echo ""
 echo "--- Script permission checks ---"
-for s in scripts/install.sh scripts/verify-integrity.sh scripts/validate.sh scripts/check-lock.py; do
+for s in scripts/install.sh scripts/verify-integrity.sh scripts/validate.sh scripts/check-lock.py scripts/nightclaw-ops.py; do
     if [[ -f "$s" ]]; then
         if [[ -x "$s" ]]; then
             check_pass "$s is executable"

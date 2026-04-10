@@ -8,42 +8,23 @@
 STARTUP — execute in this exact order before T0
 
   0. LOCK CHECK
-     READ LOCK.md. Parse status, holder, locked_at, expires_at, consecutive_pass_failures.
-
-     STALE CHECK — execute this exact Python command to determine lock state:
-       python3 -c "
-from datetime import datetime, timezone
-import sys
-expires = '[expires_at value from LOCK.md]'
-locked = '[locked_at value from LOCK.md]'
-now = datetime.now(timezone.utc)
-if expires == '\u2014' or locked == '\u2014':
-    print('PROCEED')
-    sys.exit(0)
-try:
-    exp_dt = datetime.fromisoformat(expires.replace('Z', '+00:00'))
-    lock_dt = datetime.fromisoformat(locked.replace('Z', '+00:00'))
-    age = (now - lock_dt).total_seconds()
-    if exp_dt < now or age > 1500:
-        print('PROCEED:STALE')
-    else:
-        print('DEFER')
-except:
-    print('PROCEED:STALE')
-"
-     Substitute the actual field values from LOCK.md before running.
+     Execute: python3 scripts/check-lock.py session:nightclaw-worker
      The command output is authoritative. Do not override with your own reasoning.
 
-     IF output is DEFER:
-       Output: "[LOCK] Active lock detected. Holder: [holder]. Expires: [expires_at]. Deferring."
-       Output: "[LOCK] To manually clear a stale lock: set status: released in LOCK.md"
+     Output format: PROCEED, PROCEED:STALE_HOLDER=X:STALE_RUN=Y:FAILURES=N, or DEFER:holder=X:run_id=Y:expires=Z
+     Parse the colon-delimited fields from the output. Do not read LOCK.md yourself.
+
+     IF output starts with DEFER:
+       Parse holder, run_id, expires from the output.
+       Output: "[LOCK] Active lock detected. Holder: [holder]. Expires: [expires]. Deferring."
        Append to audit/AUDIT-LOG.md: TASK:[tentative-run_id].STARTUP | TYPE:LOCK_CHECK | RESULT:BLOCKED_BY:[run_id] | HOLDER:[holder]
-       Append LOW to NOTIFICATIONS.md: "Worker startup deferred — [holder] holds lock (expires [expires_at])."
+       Append LOW to NOTIFICATIONS.md: "Worker startup deferred — [holder] holds lock (expires [expires])."
        EXIT cleanly. Do NOT proceed to step 1 or T0.
 
-     IF output is PROCEED or PROCEED:STALE:
-       IF PROCEED:STALE: prior session crashed before T9.
-         Read consecutive_pass_failures from LOCK.md. Increment by 1.
+     IF output starts with PROCEED:
+       IF output contains STALE_HOLDER: prior session crashed before T9.
+         Parse STALE_HOLDER, STALE_RUN, FAILURES from the output.
+         Set consecutive_pass_failures = FAILURES + 1.
          Append to audit/AUDIT-LOG.md: TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n]
          IF consecutive_pass_failures >= 3: append MEDIUM to NOTIFICATIONS.md:
            "session:nightclaw-worker has failed [n] consecutive passes. Check logs for crash pattern."
@@ -66,50 +47,47 @@ except:
      Write routing table + bundle specifications. Skip R1, R2, R4, R6.
 
   3. DETERMINE run_id
-     READ audit/SESSION-REGISTRY.md.
-     Count ## entries dated today (YYYY-MM-DD). Set run_id = RUN-[YYYYMMDD]-[N+1].
-     This run_id is used on ALL audit entries this session.
-     UPDATE LOCK.md run_id field to the confirmed run_id (now that N+1 is known).
+     Execute: python3 scripts/nightclaw-ops.py next-run-id
+     The output is the run_id (e.g. RUN-20260410-003). Use it on ALL audit entries this session.
+     UPDATE LOCK.md run_id field to the confirmed run_id.
 
 ─────────────────────────────────────────────
 T0  INTEGRITY CHECK
 ─────────────────────────────────────────────
-  READ audit/INTEGRITY-MANIFEST.md.
-  For each file in Protected Files table, substitute its exact relative path for FILENAME:
-    python3 -c "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('{WORKSPACE_ROOT}/FILENAME').expanduser().read_bytes()).hexdigest())"
-  Each output MUST be exactly 64 hex characters. Empty or error = FAIL (not PASS).
+  Execute: python3 scripts/nightclaw-ops.py integrity-check
+  Output is one line per file (PASS/FAIL/MISSING) plus a summary line.
+  The script output is authoritative. Do not recompute hashes yourself.
 
-  PASS → TASK:[run_id].T0 | TYPE:INTEGRITY_CHECK | RESULT:PASS | FILES:11
-  FAIL → execute BUNDLE:integrity_fail → HALT
+  RESULT:PASS → TASK:[run_id].T0 | TYPE:INTEGRITY_CHECK | RESULT:PASS | FILES:11
+  RESULT:FAIL → execute BUNDLE:integrity_fail → HALT
          (BUNDLE:integrity_fail releases LOCK.md before halting. T9 does NOT run after integrity failure.)
 
 ─────────────────────────────────────────────
 T1  DISPATCH
 ─────────────────────────────────────────────
-  READ ACTIVE-PROJECTS.md.
-  SELECT highest priority WHERE status=ACTIVE AND (escalation_pending=none OR escalation_pending STARTS WITH 'surfaced-').
-  Rows with escalation_pending=surfaced-* have already been surfaced to {OWNER} — worker proceeds with them.
-  Rows with status=TRANSITION-HOLD: skip. These are awaiting {OWNER} direction.
-  Rows with any other non-none escalation_pending value: skip (pending human response).
-  NONE found → go to T1.5.
+  Execute: python3 scripts/nightclaw-ops.py dispatch
+  Output: DISPATCH:<slug> (proceed with that project) or IDLE (go to T1.5).
+  The script applies all filtering rules (status, escalation_pending, priority sort).
+  DISPATCH:<slug> → proceed to T2 with that slug.
+  IDLE → go to T1.5.
 
 ─────────────────────────────────────────────
 T1.5  NOTIFICATIONS CHECK (runs ONLY when T1 found no active project)
 ─────────────────────────────────────────────
   This step is mandatory when T1 finds no dispatchable project. Do not skip it.
 
-  READ NOTIFICATIONS.md top to bottom.
-  SCAN for entries targeting Worker. Actionable tags:
-    WORKER-ACTION-REQUIRED, PENDING-LESSON, AUDIT-FLAG, SESSION-SUMMARY
+  Execute: python3 scripts/nightclaw-ops.py scan-notifications
+  Output: FOUND:line=<n>:<summary> entries, or NONE.
 
-  FOUND at least one actionable entry:
-    SELECT the oldest actionable entry.
-    Execute it as this pass's objective.
+  FOUND at least one:
+    Take the first (oldest) FOUND entry. Note the line number.
+    READ NOTIFICATIONS.md at that line to get the full entry content.
+    Execute the entry's action as this pass's objective.
     Log: TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:notifications | OBJECTIVE:[one-line summary of entry]
     After execution, mark the entry DONE in NOTIFICATIONS.md (prepend [DONE] to the line).
     Go to T9.
 
-  NONE found (no actionable entries, or NOTIFICATIONS.md is empty):
+  NONE:
     READ orchestration-os/OPS-IDLE-CYCLE.md → execute idle cycle
     (includes Tier 4 autonomous proposal if TRANSITION-HOLD has been pending 2+ passes)
     Go to T9.
@@ -138,9 +116,10 @@ T3  TOOL CHECK
   UNAVAILABLE/UNVERIFIED → BUNDLE:route_block → T1
 
 [BLOCKER PROTOCOL — applies at T2, T2.7, T3]
-  BUNDLE:route_block → re-read ACTIVE-PROJECTS → find next ACTIVE+none escalation.
-  FOUND → T2 for new project. Max 2 re-routes.
-  NOT FOUND → T1.5. Never halt entirely.
+  BUNDLE:route_block → Execute: python3 scripts/nightclaw-ops.py dispatch
+  The script re-scans ACTIVE-PROJECTS.md for the next eligible project.
+  DISPATCH:<slug> → T2 for new project. Max 2 re-routes.
+  IDLE → T1.5. Never halt entirely.
 
 [TIER 2B — load ONLY if T4 will write control-plane files]
   Control-plane = files outside PROJECTS/[slug]/ and audit/ appends.

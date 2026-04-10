@@ -75,9 +75,14 @@ def main():
         # Free to proceed
         holder = lock.get("holder", "—")
         run_id = lock.get("run_id", "—")
+        cpf = lock.get("consecutive_pass_failures", "0")
+        try:
+            cpf = str(int(cpf))
+        except (ValueError, TypeError):
+            cpf = "0"
         stale_info = ""
         if status == "locked":
-            stale_info = f":STALE_HOLDER={holder}:STALE_RUN={run_id}"
+            stale_info = f":STALE_HOLDER={holder}:STALE_RUN={run_id}:FAILURES={cpf}"
         print(f"PROCEED{stale_info}")
         sys.exit(0)
     else:

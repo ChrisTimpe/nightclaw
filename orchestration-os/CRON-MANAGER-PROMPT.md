@@ -8,41 +8,23 @@
 STARTUP — execute in this exact order before T0
 
   0. LOCK CHECK
-     READ LOCK.md. Parse status, holder, locked_at, expires_at, consecutive_pass_failures.
-
-     STALE CHECK — execute this exact Python command to determine lock state:
-       python3 -c "
-from datetime import datetime, timezone
-import sys
-expires = '[expires_at value from LOCK.md]'
-locked = '[locked_at value from LOCK.md]'
-now = datetime.now(timezone.utc)
-if expires == '\u2014' or locked == '\u2014':
-    print('PROCEED')
-    sys.exit(0)
-try:
-    exp_dt = datetime.fromisoformat(expires.replace('Z', '+00:00'))
-    lock_dt = datetime.fromisoformat(locked.replace('Z', '+00:00'))
-    age = (now - lock_dt).total_seconds()
-    if exp_dt < now or age > 1500:
-        print('PROCEED:STALE')
-    else:
-        print('DEFER')
-except:
-    print('PROCEED:STALE')
-"
-     Substitute the actual field values from LOCK.md before running.
+     Execute: python3 scripts/check-lock.py session:nightclaw-manager
      The command output is authoritative. Do not override with your own reasoning.
 
-     IF output is DEFER:
-       Output: "[LOCK] Active lock detected. Holder: [holder]. Expires: [expires_at]. Deferring."
+     Output format: PROCEED, PROCEED:STALE_HOLDER=X:STALE_RUN=Y:FAILURES=N, or DEFER:holder=X:run_id=Y:expires=Z
+     Parse the colon-delimited fields from the output. Do not read LOCK.md yourself.
+
+     IF output starts with DEFER:
+       Parse holder, run_id, expires from the output.
+       Output: "[LOCK] Active lock detected. Holder: [holder]. Expires: [expires]. Deferring."
        Append to audit/AUDIT-LOG.md: TASK:[tentative-run_id].STARTUP | TYPE:LOCK_CHECK | RESULT:BLOCKED_BY:[run_id] | HOLDER:[holder]
-       Append LOW to NOTIFICATIONS.md: "Manager startup deferred — [holder] holds lock (expires [expires_at])."
+       Append LOW to NOTIFICATIONS.md: "Manager startup deferred — [holder] holds lock (expires [expires])."
        EXIT cleanly. Do NOT proceed to step 1 or T0.
 
-     IF output is PROCEED or PROCEED:STALE:
-       IF PROCEED:STALE: prior session crashed before T9.
-         Read consecutive_pass_failures from LOCK.md. Increment by 1.
+     IF output starts with PROCEED:
+       IF output contains STALE_HOLDER: prior session crashed before T9.
+         Parse STALE_HOLDER, STALE_RUN, FAILURES from the output.
+         Set consecutive_pass_failures = FAILURES + 1.
          Append to audit/AUDIT-LOG.md: TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n]
          IF consecutive_pass_failures >= 3: append MEDIUM to NOTIFICATIONS.md:
            "session:nightclaw-manager has failed [n] consecutive passes. Check logs for crash pattern."
@@ -64,90 +46,76 @@ except:
      Write routing for this session.
 
   3. DETERMINE run_id
-     READ audit/SESSION-REGISTRY.md.
-     Count ## entries dated today. Set run_id = RUN-[YYYYMMDD]-[N+1].
-     UPDATE LOCK.md run_id field to the confirmed run_id (now that N+1 is known).
+     Execute: python3 scripts/nightclaw-ops.py next-run-id
+     The output is the run_id (e.g. RUN-20260410-003). Use it on ALL audit entries this session.
+     UPDATE LOCK.md run_id field to the confirmed run_id.
 
 ─────────────────────────────────────────────
 T0  SEQUENCING GATE + CRASH DETECTION
 ─────────────────────────────────────────────
-  READ audit/SESSION-REGISTRY.md (already in context — use cached).
-  READ audit/AUDIT-LOG.md — find most recent worker TASK: entries.
-
   CRASH DETECTION:
-    Find most recent RUN-YYYYMMDD-NNN in AUDIT-LOG with session=worker.
-    Skip genesis/bootstrap entries.
-    No real worker run found → skip (first deployment).
-    Found run_id:
-      Check SESSION-REGISTRY for matching ## [run_id] entry.
-      MISSING from registry AND AUDIT-LOG shows T4 CHECKPOINT for that run:
-        → Worker crashed during execution. LONGRUNNER may be partial.
-        → Parse the T4 CHECKPOINT entry for the crashed run_id to extract PROJECT:[slug].
-        → BUNDLE:surface_escalation(priority=CRITICAL, worker-crash:[run_id])
-        → Set escalation_pending=worker-crash-[run_id] on the crashed project's row ONLY.
-        → Other active projects remain unaffected and continue to be worked normally.
-        → Continue manager pass — do not halt.
-      MISSING from registry AND no T4 CHECKPOINT:
-        → Worker halted at routing. No execution occurred. No LONGRUNNER corruption.
-        → Surface as MEDIUM to NOTIFICATIONS.md. Continue.
+    Execute: python3 scripts/nightclaw-ops.py crash-detect
+    Output: CRASH:<run_id>:project=<slug> or CLEAN or ROUTING_HALT:<run_id>
+    CRASH → BUNDLE:surface_escalation(priority=CRITICAL, worker-crash:[run_id])
+           Set escalation_pending=worker-crash-[run_id] on the crashed project's row ONLY.
+           Other active projects remain unaffected. Continue manager pass — do not halt.
+    ROUTING_HALT → Surface as MEDIUM to NOTIFICATIONS.md. Continue.
+    CLEAN → continue.
 
   TIMING CHECKS:
-    Most recent worker SESSION-REGISTRY outcome empty → HALT (worker still writing).
-      NOTIFICATIONS.md: [MANAGER DEFERRED] Worker in progress.
-    Complete AND < 5 minutes ago → HALT (state flushing).
-      NOTIFICATIONS.md: [MANAGER DEFERRED] Worker completed <5min ago.
-    Otherwise → continue.
+    Execute: python3 scripts/nightclaw-ops.py timing-check
+    Output: CONTINUE, DEFER:worker_in_progress, or DEFER:worker_too_recent.
+    DEFER:worker_in_progress →
+      Append LOW to NOTIFICATIONS.md: "[MANAGER DEFERRED] Worker in progress."
+      EXIT cleanly (release lock at T9 first).
+    DEFER:worker_too_recent →
+      Append LOW to NOTIFICATIONS.md: "[MANAGER DEFERRED] Worker completed <5min ago."
+      EXIT cleanly (release lock at T9 first).
+    CONTINUE → proceed.
 
 ─────────────────────────────────────────────
 T1  INTEGRITY VERIFICATION
 ─────────────────────────────────────────────
-  READ audit/INTEGRITY-MANIFEST.md.
-  For each protected file, compute SHA256 (same python3 command as worker T0).
-  FAIL → BUNDLE:integrity_fail. Surface. Continue (do not halt manager).
-  PASS → BUNDLE:manifest_verify.
+  Execute: python3 scripts/nightclaw-ops.py integrity-check
+  The script output is authoritative. Do not recompute hashes yourself.
+  RESULT:FAIL → BUNDLE:integrity_fail. Surface. Continue (do not halt manager).
+  RESULT:PASS → BUNDLE:manifest_verify.
   TASK:[run_id].T1 | TYPE:INTEGRITY_CHECK | RESULT:[PASS|FAIL] | FILES:11
 
 ─────────────────────────────────────────────
 T2  SURFACE ESCALATIONS
 ─────────────────────────────────────────────
-  READ ACTIVE-PROJECTS.md + NOTIFICATIONS.md.
-  For each row escalation_pending ≠ none AND ≠ surfaced-[date]:
+  Execute: python3 scripts/nightclaw-ops.py dispatch
+  Scan output for SKIP lines with escalation_pending values — those are unsurfaced escalations.
+  For each escalation_pending ≠ none AND ≠ surfaced-[date]:
     READ relevant LONGRUNNER. Surface to {OWNER}: decision, options, default.
     Update ACTIVE-PROJECTS.md escalation_pending=surfaced-[YYYY-MM-DD].
 
   TRANSITION-HOLD EXPIRY CHECK:
-  For each DISPATCH row WHERE status=TRANSITION-HOLD:
-    READ its LONGRUNNER.md. Parse transition_expires and transition_reescalation_count.
-    IF transition_expires < [current UTC time]:
-      IF transition_reescalation_count < 3:
-        Append CRITICAL to NOTIFICATIONS.md:
-          action_needed="TRANSITION-HOLD expired: [slug]. Phase completed [transition_triggered_at].
-          Awaiting direction. Re-escalation [count+1] of 3.
-          Default after 3rd: project auto-pauses. Set OPS-PREAPPROVAL entry to authorize auto-advance."
-        Increment LONGRUNNER transition_reescalation_count by 1.
-        Update ACTIVE-PROJECTS.md escalation_pending=transition-stale-re[count+1]-[YYYY-MM-DD].
-      IF transition_reescalation_count >= 3:
-        Set ACTIVE-PROJECTS.md status=PAUSED.
-        Set escalation_pending=transition-auto-paused-[YYYY-MM-DD].
-        Append CRITICAL to NOTIFICATIONS.md:
-          action_needed="[slug] auto-paused: 3 unanswered TRANSITION-HOLD escalations.
-          Set status=ACTIVE (and provide direction) to resume. Phase decision still required."
-    IF transition_expires is blank or ~ (LONGRUNNER predates v0.001):
-      Treat as expires=[transition_triggered_at + 3 days] for re-escalation purposes.
-      If triggered_at also blank: skip this project (no transition data to evaluate).
+  Execute: python3 scripts/nightclaw-ops.py transition-expiry
+  Output: EXPIRED:<slug>:reescalation_count=<n> with ACTION:REESCALATE or ACTION:AUTO_PAUSE.
+  For each EXPIRED result:
+    ACTION:REESCALATE →
+      Append CRITICAL to NOTIFICATIONS.md:
+        action_needed="TRANSITION-HOLD expired: [slug]. Re-escalation [count+1] of 3.
+        Default after 3rd: project auto-pauses."
+      Increment LONGRUNNER transition_reescalation_count by 1.
+      Update ACTIVE-PROJECTS.md escalation_pending=transition-stale-re[count+1]-[YYYY-MM-DD].
+    ACTION:AUTO_PAUSE →
+      Set ACTIVE-PROJECTS.md status=PAUSED, escalation_pending=transition-auto-paused-[YYYY-MM-DD].
+      Append CRITICAL to NOTIFICATIONS.md:
+        action_needed="[slug] auto-paused: 3 unanswered TRANSITION-HOLD escalations."
+  ALL_CURRENT → no action needed.
 
 ─────────────────────────────────────────────
 T3  CHANGE DETECTION
 ─────────────────────────────────────────────
-  READ ACTIVE-PROJECTS.md.
-  Count rows where status = active.
+  Execute: python3 scripts/nightclaw-ops.py change-detect
+  Output: NO_ACTIVE_PROJECTS, NO_CHANGES, or NEW_ACTIVITY:<slug> lines.
 
-  IF 0 active projects → go to T3.5 (STRATEGIC DIRECTION).
-  IF active projects exist:
-    READ PROJECTS/MANAGER-REVIEW-REGISTRY.md.
-    Compare ACTIVE-PROJECTS.md last_worker_pass vs registry last_review_date.
-    No new activity → memory one-liner. Go to T8.
-    New activity → T4.
+  NO_ACTIVE_PROJECTS → go to T3.5 (STRATEGIC DIRECTION).
+  NEW_ACTIVITY:<slug> → T4 (review those projects).
+  NO_CHANGES → APPEND one-liner to memory/YYYY-MM-DD.md (inline): "No new worker activity." Go to T8.
 
 ─────────────────────────────────────────────
 T3.5  STRATEGIC DIRECTION (idle state only)
@@ -233,18 +201,17 @@ T7  UPDATE MANAGER REGISTRY
 ─────────────────────────────────────────────
 T8  AUDIT REVIEW + OS IMPROVEMENT  (mandatory every cycle)
 ─────────────────────────────────────────────
-  AUDIT SPINE CHECK — for every worker session since last review:
-    T0 exists → T4.CHECKPOINT exists → T9 exists?
-    T0 only (no T4)  → routing halt — MEDIUM (expected behavior, no action)
-    T0 + T4 (no T9)  → crash during execution — CRITICAL surface + worker-crash escalation
-    T0 + T4 + T9     → clean pass — no action
+  AUDIT SPINE CHECK:
+    Execute: python3 scripts/nightclaw-ops.py audit-spine
+    Output: CLEAN_PASS, ROUTING_HALT, or CRASH per run_id, plus SUMMARY line.
+    CRASH → CRITICAL surface + worker-crash escalation (if not already surfaced at T0).
+    ROUTING_HALT → MEDIUM (expected behavior, no action).
+    CLEAN_PASS → no action.
 
-  AUDIT ANOMALY SCAN — scan AUDIT-LOG since last cycle:
-    FILE_WRITE to PROTECTED without {OWNER} auth → CRITICAL
-    INTEGRITY_CHECK FAIL not in NOTIFICATIONS → CRITICAL
-    PA_INVOKE without APPROVAL-CHAIN match → HIGH
-    Session tokens > 80,000 → MEDIUM
-    CONSTRAINT_VIOLATION entry → HIGH
+  AUDIT ANOMALY SCAN:
+    Execute: python3 scripts/nightclaw-ops.py audit-anomalies
+    Output: ANOMALY:<severity>:<type>:<details> lines, or CLEAN.
+    For each ANOMALY: surface to NOTIFICATIONS.md at the indicated severity.
   No anomalies: TASK:[run_id].T8 | TYPE:MANAGER_REVIEW | RESULT:PASS | ENTRIES:[n]
 
   CRITICAL: audit/AUDIT-LOG.md is APPEND-ONLY. Every write to this file must append a new line.
@@ -255,14 +222,10 @@ T8  AUDIT REVIEW + OS IMPROVEMENT  (mandatory every cycle)
   Exception: T8.3 NOTIFICATIONS PRUNING below may move resolved entries to archive.
 
   T8.3  NOTIFICATIONS PRUNING (every cycle)
-    READ NOTIFICATIONS.md top to bottom.
-    Identify entries that meet ANY of these criteria:
-      - Marked [DONE] by worker (resolved at T1.5)
-      - Priority: INFO and older than 7 days
-      - Priority: LOW and older than 14 days
-      - Priority: MEDIUM|HIGH|CRITICAL and older than 30 days
-      - Any entry older than 90 days regardless of priority
-    For each qualifying entry:
+    Execute: python3 scripts/nightclaw-ops.py prune-candidates
+    Output: PRUNE:line=<n>:reason=<reason>:<preview> lines, or NONE.
+    NONE → skip silently.
+    For each PRUNE entry:
       1. APPEND the entry verbatim to NOTIFICATIONS-ARCHIVE.md
          (create file if it does not exist)
       2. Remove the entry from NOTIFICATIONS.md
@@ -272,7 +235,8 @@ T8  AUDIT REVIEW + OS IMPROVEMENT  (mandatory every cycle)
     If no entries qualify: skip silently. Do not log.
 
   REGISTRY SELF-CONSISTENCY (monthly or when REGISTRY.md modified):
-    SCR-01 through SCR-06 from REGISTRY.md R6.
+    Execute: python3 scripts/nightclaw-ops.py scr-verify
+    Output: SCR-NN:PASS or SCR-NN:FAIL per rule, plus RESULT:PASS or RESULT:FAIL.
     Any FAIL → NOTIFICATIONS.md HIGH.
 
   OS IMPROVEMENT:

@@ -10,6 +10,11 @@
 # This file is the map. The prompts are the instructions. The audit files are the record.
 # These three layers never overlap.
 #
+# Deterministic operations: scripts/nightclaw-ops.py replaces LLM reasoning with code
+# for all structured checks (integrity, dispatch, crash detection, pruning, SCR rules, etc.).
+# Prompts call the script and act on its machine-parseable output. The LLM never does
+# computation that code can do — hashing, date math, set comparison, table parsing, grep.
+#
 # Design model: NightClaw is an object model with cascade integrity, not a file collection.
 # This file is the schema. R1–R2 = object definitions and field contracts.
 # R3 = write-routing table (tier + bundle per file). R4 = dependency graph — the cascade
