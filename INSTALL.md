@@ -130,7 +130,7 @@ openclaw cron add \
   --name "nightclaw-worker-trigger" \
   --every 3h \
   --session "session:nightclaw-worker" \
-  --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
+  --message "READ orchestration-os/CRON-WORKER-PROMPT.md. Execute STARTUP through T9 exactly. No improvisation." \
   --light-context \
   --no-deliver \
   --model anthropic/claude-haiku-3-5
@@ -139,7 +139,7 @@ openclaw cron add \
   --name "nightclaw-manager-trigger" \
   --every 24h \
   --session "session:nightclaw-manager" \
-  --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
+  --message "READ orchestration-os/CRON-MANAGER-PROMPT.md. Execute STARTUP through T9 exactly. No improvisation." \
   --light-context \
   --no-deliver \
   --model anthropic/claude-sonnet-4-6
@@ -163,6 +163,7 @@ listed in INTEGRITY-MANIFEST.md, and all cross-references resolve.
 - Every autonomous action is checked against a scope escalation test
 - Append-only audit trail from the first session
 - Approval chain linking {OWNER} authorization to agent action to audit entry
+- `nightclaw-admin` CLI for managing the system without spending tokens (approve, pause, guide, arm/disarm)
 - Emergency kill switch active from install
 
 Full deployment details: [`DEPLOY.md`](DEPLOY.md)

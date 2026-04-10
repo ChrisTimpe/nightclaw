@@ -22,10 +22,10 @@ Action required: [what {OWNER} needs to do, or NONE]
 ```
 [YYYY-MM-DD HH:MM] | Priority: HIGH | Project: [slug] | Status: TRANSITION-HOLD
 Context: [phase] phase complete. Artifact: [path to output file]
-Action required: Tell the agent to 'approve', 'pause', or 'pivot' this project.
+Action required: From terminal: nightclaw-admin approve/pause <slug>. Or tell the agent in a main session.
   approve — advance to [successor phase] and continue autonomous work
   pause   — hold the project until you reactivate it manually
-  pivot   — agent will ask for new direction before making changes
+  pivot   — (main session only) agent will ask for new direction before making changes
 ```
 
 ### Proposed Enhancement Entry
@@ -68,11 +68,11 @@ Next steps (in order):
   5. Create two crons per DEPLOY.md §Step 5
   6. Before first overnight: activate PA-001 and PA-002 in OPS-PREAPPROVAL.md,
      then: bash scripts/resign.sh orchestration-os/OPS-PREAPPROVAL.md
-  7. Start crons and open a main session — agent will brief you
+  7. Start crons — check status with: nightclaw-admin status
 What happens next (no action required):
   - On first idle cycle, the worker reads your Domain Anchor and proposes a first project
   - A MEDIUM notification will appear here with the draft and a one-word approval path
-  - Say "approve" in the main session to begin, or describe what you want instead
+  - Run: nightclaw-admin approve <slug>  (or say "approve" in a main session)
 Action required: NONE — system will propose work autonomously based on your Domain Anchor
 
 ---
