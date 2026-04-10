@@ -332,22 +332,27 @@ cmd_approve() {
     [[ -f "$draft_path" ]] || error "No draft found at $draft_path"
     [[ ! -f "$longrunner_path" ]] || error "LONGRUNNER.md already exists for $slug — cannot approve over existing project"
 
-    # Rename draft → LONGRUNNER
-    mv "$draft_path" "$longrunner_path"
-    info "Renamed LONGRUNNER-DRAFT.md → LONGRUNNER.md"
+    # --- Atomic approve: copy first, insert row, then delete draft ---
+    # If any step fails, the draft still exists and the copy is cleaned up.
 
-    # Check if already in ACTIVE-PROJECTS.md
+    # Step 1: Copy draft → LONGRUNNER (draft stays as rollback anchor)
+    cp "$draft_path" "$longrunner_path"
+
+    # Step 2: Insert/update ACTIVE-PROJECTS row
+    local row_result=0
     local existing_row
     existing_row=$(get_project_row "$slug")
     if [[ -n "$existing_row" ]]; then
-        # Update existing row to active
         local old_status
         old_status=$(get_project_field "$slug" 5) || true
-        update_project_field "$slug" 5 "active"
+        update_project_field "$slug" 5 "active" || row_result=$?
+        if [[ $row_result -ne 0 ]]; then
+            rm -f "$longrunner_path"
+            error "Failed to update ACTIVE-PROJECTS.md row. Rolled back — draft preserved at $draft_path"
+        fi
         change_log "FILE:ACTIVE-PROJECTS.md#${slug}.status" "${old_status:-unknown}" "active" "owner approved draft via nightclaw-admin"
         info "Updated existing row in ACTIVE-PROJECTS.md → active"
     else
-        # Add new row
         local max_priority
         max_priority=$(awk -F'|' 'NR>3 && /\|/ {gsub(/ /,"",$2); if ($2 ~ /^[0-9]+$/) print $2}' \
             "$ACTIVE_PROJECTS" 2>/dev/null | sort -n | tail -1)
@@ -381,16 +386,24 @@ else:
 
 with open(filepath, 'w') as f:
     f.write(content)
-" "$ACTIVE_PROJECTS" "$new_row"
+" "$ACTIVE_PROJECTS" "$new_row" || row_result=$?
+
+        if [[ $row_result -ne 0 ]]; then
+            rm -f "$longrunner_path"
+            error "Failed to insert ACTIVE-PROJECTS.md row. Rolled back — draft preserved at $draft_path"
+        fi
 
         change_log "FILE:ACTIVE-PROJECTS.md#${slug}" "NONE" "priority=${next_priority},status=active,phase=exploration" "owner approved draft via nightclaw-admin"
         info "Added row to ACTIVE-PROJECTS.md (priority $next_priority)"
     fi
 
-    # Audit
+    # Step 3: Both writes succeeded — delete the draft (completes the rename)
+    rm -f "$draft_path"
+    info "Removed draft (LONGRUNNER-DRAFT.md → LONGRUNNER.md)"
+
+    # Step 4: Audit + notification (non-critical — failure here doesn't break state)
     audit_log "TYPE:ADMIN_APPROVE | RESULT:SUCCESS | PROJECT:$slug | DRAFT:$draft_path"
 
-    # Append resolution to NOTIFICATIONS.md
     echo "" >> "$NOTIFICATIONS"
     echo "[$NOW_HUMAN] | Priority: INFO | Project: $slug | Status: APPROVED" >> "$NOTIFICATIONS"
     echo "Context: Owner approved project draft via nightclaw-admin CLI." >> "$NOTIFICATIONS"
