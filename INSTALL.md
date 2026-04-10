@@ -125,22 +125,24 @@ The agent should respond using your configured model. If it falls back to a diff
 # Set agent timeout
 openclaw config set agents.defaults.timeoutSeconds 600
 
-# Create two crons
+# Create two crons (model flags are critical for cost control)
 openclaw cron add \
   --name "nightclaw-worker-trigger" \
-  --every 60m \
+  --every 3h \
   --session "session:nightclaw-worker" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-haiku-3-5
 
 openclaw cron add \
   --name "nightclaw-manager-trigger" \
-  --every 105m \
+  --every 24h \
   --session "session:nightclaw-manager" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-sonnet-4-6
 ```
 
 ## Validation

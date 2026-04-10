@@ -78,7 +78,7 @@ First public release. All development hardening from internal versions v0.001 an
 - TRANSITION-HOLD timeout — 3-day default, CRITICAL re-escalation × 3, then auto-pause
 - Async proposal surface (NOTIFICATIONS.md) — agent appends, owner reviews at morning check
 - Pre-approval system for unattended overnight operation
-- Two-cron orchestration: worker (60 min execution) + manager (105 min review/direction)
+- Two-cron orchestration: worker (3h on Haiku) + manager (24h on Sonnet) — model assignment and frequency tuned for $20/mo OAuth budgets
 - REGISTRY.md dual-tier write routing — append vs. structural operations explicitly separated
 - Behavioral discipline (Hard Lines as agent identity — not enforced security)
 - Pre-write protocol: scope check → dependency read → write → audit (PW-1 through PW-5)

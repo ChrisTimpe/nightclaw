@@ -207,22 +207,24 @@ bash scripts/verify-integrity.sh
 # Set agent timeout
 openclaw config set agents.defaults.timeoutSeconds 600
 
-# Create two crons
+# Create two crons (model flags are critical for cost control)
 openclaw cron add \
   --name "nightclaw-worker-trigger" \
-  --every 60m \
+  --every 3h \
   --session "session:nightclaw-worker" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-haiku-3-5
 
 openclaw cron add \
   --name "nightclaw-manager-trigger" \
-  --every 105m \
+  --every 24h \
   --session "session:nightclaw-manager" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-sonnet-4-6
 ```
 
 > **Cron session names** are `nightclaw-worker` and `nightclaw-manager` by default. Rename them to anything — update both `--name` and `--session` together, and update references in `orchestration-os/OPS-CRON-SETUP.md`.
@@ -304,9 +306,9 @@ After install, merge your customizations back in. Content worth preserving: your
 
 ## How It Works
 
-Two crons run permanently. The **worker** fires every 60 minutes: verifies session state, reads the dispatch table, routes to the highest-priority active project, and executes one bounded pass (T0–T9): drift check → dispatch → tool pre-flight → execute → validate → quality check → state update → OS improvement → session close. If it hits a blocker, it runs the blocker decision tree — applies the known fix, checks pre-approvals, attempts partial completion, or surfaces a proposal and re-routes. It is designed to never halt on recoverable blockers — integrity failures halt by design.
+Two crons run permanently. The **worker** fires every 3 hours on a cheap model (Haiku): verifies session state, reads the dispatch table, routes to the highest-priority active project, and executes one bounded pass (T0–T9): drift check → dispatch → tool pre-flight → execute → validate → quality check → state update → OS improvement → session close. If it hits a blocker, it runs the blocker decision tree — applies the known fix, checks pre-approvals, attempts partial completion, or surfaces a proposal and re-routes. It is designed to never halt on recoverable blockers — integrity failures halt by design. Most structured checks (integrity, dispatch, crash detection, timing, pruning) are handled by deterministic scripts (`scripts/nightclaw-ops.py`) — the model reads script output and acts on it, never computing what code can compute.
 
-The **manager** fires every 105 minutes — offset deliberately to review a completed worker pass, not a running one. It functions as a supervisory process: detects worker crash state (stale lock with no heartbeat triggers recovery escalation), surfaces held escalations, runs quality and direction reviews, rebalances priorities, and audits recent passes. It is the human's proxy inside the system.
+The **manager** fires once per day on an expensive model (Sonnet). It reviews accumulated worker passes, detects worker crash state, surfaces held escalations, runs quality and direction reviews, rebalances priorities, audits recent passes, and sets strategic direction when no projects are active. It is the human's proxy inside the system. Running it once daily is sufficient — the expensive model is reserved for judgment work, not routine checks.
 
 The **human touchpoint** is async. The agent surfaces proposals, blockers, and enhancement candidates to NOTIFICATIONS.md as it encounters them. The owner reviews at their own cadence — typically a morning check — approves or guides, and the next worker pass acts on those decisions. This is the designed interaction pattern, not an exception flow.
 
@@ -504,7 +506,7 @@ None of these patterns are novel in isolation — they are proven systems engine
 ├──────────────────────────────────────────────────────────────┤
 │  CRON-HARDLINES.md    Behavioral constraints for cron runs   │
 ├─────────────────────────┬────────────────────────────────────┤
-│   Worker (60 min)       │   Manager (105 min)                │
+│   Worker (3h, Haiku)    │   Manager (24h, Sonnet)            │
 │                         │                                    │
 │   T0 Drift check        │   T0 Crash detection               │
 │   T1 Dispatch           │   T1 Drift verification            │
@@ -555,7 +557,7 @@ Six chains active from first cron pass — Domain Anchor → Tier 4 → NOTIFICA
 ## Requirements
 
 - [OpenClaw](https://github.com/openclaw/openclaw) `2026.2.13` or later (CVE patched). Recommended: `2026.4.5`+ — two fixes required: `--every` flag format changed in `2026.4.1` (human-readable strings: `60m`, `1h`); `--light-context` workspace injection bug fixed in `2026.4.5` (PR #60776). NightClaw's cron architecture depends on both. Current release: `2026.4.5`.
-- Any supported LLM provider — OpenAI, Anthropic, Google, or local models via Ollama
+- Any supported LLM provider — OpenAI, Google, or local models via Ollama
 - **Model minimum for autonomous cron sessions:** A capable instruction-following model is required. Confirmed working: Claude Sonnet 4.5+ (community sweet spot), GPT-5 class (gpt-5.3-codex or equivalent). Ollama works for evaluation and lightweight tiers. Do not use GPT-4o class or below for cron sessions — instruction-following degrades and orchestration controls cannot maintain correctness.
 - A terminal for one-time placeholder substitution and first-sign
 

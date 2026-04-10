@@ -214,9 +214,9 @@ tail -5 ~/.openclaw/workspace/memory/$(date +%Y-%m-%d).md
 
 ## Issue: Cron timing — manager and worker firing simultaneously
 
-**This is expected behavior** when the 420-minute LCM cycle aligns them (every ~7 hours with default settings). The lock protocol handles it: the first session to fire acquires the lock, the second defers cleanly and runs on its next scheduled cycle.
+**This is expected behavior** when the LCM cycle aligns them (every 24 hours with default 3h worker / 24h manager settings). The lock protocol handles it: the first session to fire acquires the lock, the second defers cleanly and runs on its next scheduled cycle.
 
-No action needed. A 1-cycle deferral (60 min for worker, 105 min for manager) is the designed outcome.
+No action needed. A 1-cycle deferral (3h for worker, 24h for manager) is the designed outcome.
 
 ---
 
@@ -229,6 +229,6 @@ nano ~/.openclaw/workspace/ACTIVE-PROJECTS.md
 # Set all project rows to: status: paused
 ```
 
-The next cron pass reads ACTIVE-PROJECTS.md at T1 and finds nothing actionable. All work stops at the next cycle boundary (within 60 minutes at most).
+The next cron pass reads ACTIVE-PROJECTS.md at T1 and finds nothing actionable. All work stops at the next cycle boundary (within 3 hours at most).
 
 To resume: change status back to `active`.

@@ -160,28 +160,34 @@ Tell it what to work on, or add a project row to ACTIVE-PROJECTS.md first.
 openclaw config set agents.defaults.timeoutSeconds 600
 ```
 
-### Cron 1: Worker (every 60 minutes)
+### Cron 1: Worker (every 3 hours)
+
+The worker uses a cheap model for steady execution. 3-hour intervals are the recommended starting point for $20/mo OAuth budgets — 8 passes/day provides consistent progress without exhausting rate limits.
 
 ```bash
 openclaw cron add \
   --name "nightclaw-worker-trigger" \
-  --every 60m \
+  --every 3h \
   --session "session:nightclaw-worker" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-haiku-3-5
 ```
 
-### Cron 2: Manager (every 105 minutes)
+### Cron 2: Manager (once per day)
+
+The manager uses a heavy model for judgment and direction-setting. Once per day is sufficient — the manager reviews accumulated worker passes, detects crashes, surfaces escalations, and sets strategic direction. Running more frequently burns expensive model tokens on repeated "no changes" results.
 
 ```bash
 openclaw cron add \
   --name "nightclaw-manager-trigger" \
-  --every 105m \
+  --every 24h \
   --session "session:nightclaw-manager" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-sonnet-4-6
 ```
 
 ### Why custom named sessions
@@ -218,8 +224,12 @@ A structured log entry means it worked.
 Session startup floor: ~6,900 tokens (SOUL + AGENTS + WORKING + ACTIVE-PROJECTS).
 Cron pass startup: ~2,400 additional tokens (CRON-HARDLINES + REGISTRY R3+R5).
 
-Start crons at 60-minute intervals. Observe actual consumption before tightening.
+**$20/mo OAuth budget guidance:** At 3-hour worker intervals (8 passes/day on Haiku) + 1 manager pass/day (Sonnet) + 1 heartbeat/day (Haiku), the system fits comfortably within a ChatGPT Plus subscription. The deterministic ops toolkit (`scripts/nightclaw-ops.py`) eliminates ~120K tokens/day of LLM reasoning that code handles instead — integrity checks, dispatch, crash detection, timing, pruning, and audit are all script output, not model computation.
+
+**Model assignment matters more than frequency.** The worker runs on the cheapest capable model (Haiku) because its job is structured execution — read script output, follow instructions, write results. The manager runs on an expensive model (Sonnet) because its job is judgment — quality evaluation, strategic direction, anomaly interpretation. Running both on the same model either wastes money (worker on Sonnet) or degrades governance (manager on Haiku).
+
 `--light-context` is essential — prevents context accumulation across runs.
+`--model` on each cron is essential — prevents both crons from inheriting whatever default model is configured.
 
 ---
 
@@ -227,7 +237,7 @@ Start crons at 60-minute intervals. Observe actual consumption before tightening
 
 OpenClaw's heartbeat fires periodic agent turns in the main session. **The default configuration will silently drain your token budget.** Default interval is 30 minutes (48 calls/day), running on whatever model your agent defaults to, with full conversation history and all bootstrap files loaded.
 
-NightClaw's cron worker and manager run in their own dedicated sessions — they do not depend on the heartbeat. The heartbeat's only job is lightweight monitoring (surfacing notifications, checking cron health, inbox triage). It does not need an expensive model or full session context.
+NightClaw's cron worker and manager run in their own dedicated sessions — they do not depend on the heartbeat. The heartbeat's only job is a lightweight daily health check. It does not need an expensive model, frequent runs, or full session context.
 
 **Recommended heartbeat configuration** (add to `openclaw.json`):
 
@@ -236,7 +246,7 @@ NightClaw's cron worker and manager run in their own dedicated sessions — they
   "agents": {
     "defaults": {
       "heartbeat": {
-        "every": "60m",
+        "every": "24h",
         "model": "anthropic/claude-haiku-3-5",
         "lightContext": true,
         "isolatedSession": true,
@@ -253,7 +263,7 @@ NightClaw's cron worker and manager run in their own dedicated sessions — they
 Or apply via CLI:
 
 ```bash
-openclaw config set agents.defaults.heartbeat.every "60m"
+openclaw config set agents.defaults.heartbeat.every "24h"
 openclaw config set agents.defaults.heartbeat.model "anthropic/claude-haiku-3-5"
 openclaw config set agents.defaults.heartbeat.lightContext true
 openclaw config set agents.defaults.heartbeat.isolatedSession true
@@ -264,11 +274,11 @@ openclaw gateway restart   # or: openclaw gateway stop && openclaw gateway
 
 | Setting | Default | Recommended | Why |
 |---|---|---|---|
-| `every` | 30m (48/day) | 60m (24/day) | Halves heartbeat calls |
+| `every` | 30m (48/day) | 24h (1/day) | The worker and manager crons handle all monitoring — the heartbeat is just a daily safety net |
 | `model` | Agent default (often Sonnet) | Haiku | ~5x cheaper per call — heartbeat checks are trivial |
 | `lightContext` | false | true | Only injects HEARTBEAT.md, not full workspace bootstrap |
 | `isolatedSession` | false | true | Fresh session each tick — no conversation history (~100K → ~2-5K tokens) |
-| `activeHours` | none (24/7) | 07:00–23:00 | Eliminates overnight ticks when no one is reading alerts |
+| `activeHours` | none (24/7) | 07:00–23:00 | Ensures the daily tick fires during waking hours |
 
 **Without these settings**, a Sonnet-class heartbeat at 30m intervals with full session context can consume more tokens than all your cron passes combined — potentially $10-15/day in API costs for checks that produce `HEARTBEAT_OK` 95% of the time.
 

@@ -726,7 +726,7 @@ openclaw --version
 
 **Detection signal:** Tool call returns an error containing "429", "rate limit", or "too many requests"; or the session errors out unexpectedly mid-T4 without a matching failure mode. A sudden stop with no output is also consistent.
 
-**Fix:** Stop T4 execution immediately. Log partial progress in LONGRUNNER `last_pass.output_files` — note specifically what was completed before the limit was hit. Set `next_pass.objective` to retry from the last completed step. Do NOT route to another project — rate limits affect all projects on the same API key equally; additional passes in the same cycle will hit the same limit. If limit was triggered on an enhanced tier, downgrade `next_pass.model_tier` to standard. Exit via T9 (do not skip session close). The 60-minute cron gap is generally sufficient for TPM resets on standard tiers.
+**Fix:** Stop T4 execution immediately. Log partial progress in LONGRUNNER `last_pass.output_files` — note specifically what was completed before the limit was hit. Set `next_pass.objective` to retry from the last completed step. Do NOT route to another project — rate limits affect all projects on the same API key equally; additional passes in the same cycle will hit the same limit. If limit was triggered on an enhanced tier, downgrade `next_pass.model_tier` to standard. Exit via T9 (do not skip session close). The 3-hour cron gap is more than sufficient for TPM resets on standard tiers.
 
 **Prevention:** Stay within model_tier budget guidelines per pass (see DEPLOY.md for token budgets by tier). For research-heavy passes, prefer multiple bounded passes over a single large pass. If rate limits recur on consecutive passes, reduce `context_budget` in the LONGRUNNER and route to a lower model tier.
 
@@ -749,7 +749,7 @@ openclaw --version
 3. Set `next_pass.objective` to continue from the last successfully fetched checkpoint (e.g., last ticker, last page, last date offset)
 4. Add a `time.sleep(1)` (or per-API documented minimum) between requests in any fetch loop — government APIs commonly require ≥1 second between requests
 5. Do NOT retry the failed request immediately in the same pass — this triggers longer bans on many public APIs
-6. Exit via T9 normally; the 60-minute cron gap is generally sufficient for public API rate limit resets
+6. Exit via T9 normally; the 3-hour cron gap is more than sufficient for public API rate limit resets
 
 **Prevention:** For any pass that fetches from external APIs in a loop, add a delay between requests from the start. Prefer paginated/batched calls over individual-record calls. If rate limits recur on multiple consecutive passes against the same API, reduce fetch batch size and add a note to the LONGRUNNER `notes` field.
 
@@ -771,7 +771,7 @@ openclaw --version
 **Fix:**
 1. Disable heartbeat immediately to stop the bleed: `openclaw system heartbeat disable`
 2. Reconfigure with cost-optimized settings:
-   - `openclaw config set agents.defaults.heartbeat.every "60m"`
+   - `openclaw config set agents.defaults.heartbeat.every "24h"`
    - `openclaw config set agents.defaults.heartbeat.model "anthropic/claude-haiku-3-5"` (or equivalent cheap model)
    - `openclaw config set agents.defaults.heartbeat.lightContext true`
    - `openclaw config set agents.defaults.heartbeat.isolatedSession true`

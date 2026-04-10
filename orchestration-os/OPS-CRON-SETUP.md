@@ -35,13 +35,14 @@ The crons are permanent. The dispatch table is dynamic.
 HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps.
 ```
 
-**Recommended starting cadence:** Every 60 minutes
-**Rate limit note ($20 OAuth plan):** Community reports show autonomous agents exhaust the 5-hour window in 2–5 tasks. Start at 60 minutes. After observing 3–5 real pass durations in `memory/YYYY-MM-DD.md`, tighten if passes are consistently short (< 10 min) and budget allows.
-**Adjust after observing:** Check `memory/YYYY-MM-DD.md` pass logs after 3 cycles. If passes average < 15 min and you have budget headroom, shorten to 30–45. If passes run heavy or hit rate limits, widen to 90 min.
+**Recommended starting cadence:** Every 3 hours
+**Rate limit note ($20 OAuth plan):** Community reports show autonomous agents exhaust the 5-hour window in 2–5 tasks. A 3-hour cadence (~8 passes/day) keeps token spend well within the $20/month OAuth budget. After observing 3–5 real pass durations in `memory/YYYY-MM-DD.md`, tighten if passes are consistently short (< 10 min) and budget allows.
+**Adjust after observing:** Check `memory/YYYY-MM-DD.md` pass logs after 3 cycles. If passes average < 15 min and you have budget headroom, shorten to 1h. If passes run heavy or hit rate limits, widen to 6h.
 
 **Name this cron:** `nightclaw-worker-trigger`
 **Session flag:** `--session "session:nightclaw-worker" --light-context`
-**Interval flag:** `--every 60m`
+**Interval flag:** `--every 3h`
+**Model flag:** `--model anthropic/claude-haiku-3-5`
 **Delivery flag:** `--no-deliver`
 
 > **Format change in 2026.4.1:** `--every` now takes human-readable strings (`60m`, `1h`, `1d`). Millisecond values (e.g. `3600000`) are no longer valid and will error.
@@ -64,13 +65,14 @@ HARD LINES ACTIVE: never post externally, never write outside workspace, never m
 HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps.
 ```
 
-**Recommended starting cadence:** Every 105 minutes (1.75× the 60-min worker cadence)
+**Recommended starting cadence:** Every 24 hours (1 pass/day — the manager governs direction, not execution)
 **Name this cron:** `nightclaw-manager-trigger`
 **Session flag:** `--session "session:nightclaw-manager" --light-context`
-**Interval flag:** `--every 105m`
+**Interval flag:** `--every 1d`
+**Model flag:** `--model anthropic/claude-sonnet-4-6`
 **Delivery flag:** `--no-deliver`
 
-> **Format change in 2026.4.1:** `--every` now takes human-readable strings. Use `105m` not `6300000`.
+> **Format change in 2026.4.1:** `--every` now takes human-readable strings. Use `1d` not milliseconds.
 > **`--no-deliver` is required** — same reason as worker cron above.
 
 ---
@@ -78,8 +80,8 @@ HARD LINES ACTIVE: never post externally, never write outside workspace, never m
 ## Setup Checklist
 
 ```
-□ Cron 1 created: nightclaw-worker-trigger, every 60 min, session:nightclaw-worker, --light-context
-□ Cron 2 created: nightclaw-manager-trigger, every 105 min, session:nightclaw-manager, --light-context
+□ Cron 1 created: nightclaw-worker-trigger, every 3h, --model anthropic/claude-haiku-3-5, session:nightclaw-worker, --light-context
+□ Cron 2 created: nightclaw-manager-trigger, every 1d, --model anthropic/claude-sonnet-4-6, session:nightclaw-manager, --light-context
 □ ACTIVE-PROJECTS.md exists in workspace root with at least one active row
 □ Each active project has a valid LONGRUNNER.md with:
     □ phase.status = "active"
@@ -149,7 +151,7 @@ at T9 (BUNDLE:session_close). If a new cron fires while the lock is held by a va
 (non-stale) session: exit immediately with a LOW deferral note to NOTIFICATIONS.md.
 
 **Cadence implication:** Do not run the worker cadence below 25 minutes. The 20-minute
-stale threshold is designed for the 60-minute default cadence — at <25 minutes, a
+stale threshold is designed for the 3-hour default cadence — at <25 minutes, a
 legitimate in-progress pass could be incorrectly classified as stale. See FM-028 for the
 full failure mode and detection signals.
 
@@ -161,7 +163,7 @@ Update this table as you observe real pass durations:
 
 | Date | Project | Avg Pass Duration | Cron Setting | Alignment |
 |------|---------|------------------|--------------|-----------|
-| 2026-04-02 | [project-slug] | unknown — first run | 60 min (starting cadence) | TBD |
+| 2026-04-02 | [project-slug] | unknown — first run | 3h (starting cadence) | TBD |
 | — | — | — | — | — |
 
 After 3–5 cycles, adjust cron cadence based on observed duration. Document it here.
@@ -179,30 +181,33 @@ openclaw cron list
 # Note the ID next to "nightclaw-worker-trigger" or "nightclaw-manager-trigger"
 
 # Step 2 — Delete and recreate with new cadence
-# Example: tightening worker from 60m to 30m after observing short passes
+# Example: tightening worker from 3h to 1h after observing short passes
 
 openclaw cron delete [worker-cron-id]
 
 openclaw cron add \
   --name "nightclaw-worker-trigger" \
-  --every 30m \
+  --every 1h \
+  --model anthropic/claude-haiku-3-5 \
   --session "session:nightclaw-worker" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
   --no-deliver
 # Note: --tz is NOT valid with --every. Remove it.
-# Note: --every uses human-readable strings as of 2026.4.1 (60m, 30m, 1h). Milliseconds no longer accepted.
+# Note: --every uses human-readable strings as of 2026.4.1 (3h, 1h, 1d). Milliseconds no longer accepted.
+# Note: --model is REQUIRED — without it, the cron uses the platform default model, which may be expensive.
 # Note: --no-deliver required for all custom session crons to avoid channel resolution errors.
 ```
 
 **Before tightening cadence:** confirm the average pass duration from `memory/YYYY-MM-DD.md`.
-If passes average 12 minutes, a 15-minute cadence works. If passes average 25 minutes,
-keep at 60 minutes — overlapping crons corrupt LONGRUNNER state.
+If passes average 12 minutes, a 1-hour cadence works. If passes average 25 minutes,
+keep at 3 hours — overlapping crons corrupt LONGRUNNER state.
 
 **Cadence decision rule:** cron interval ≥ (average pass duration × 1.5). Buffer matters.
 
-**Rate limit guardrail:** At 30m cadence = ~10 passes per 5-hour window. Community reports
-show the $20 OAuth plan exhausting in 2-5 autonomous tasks. Tighten carefully.
+**Rate limit guardrail:** At 1h cadence = ~24 passes/day. Community reports
+show the $20 OAuth plan exhausting in 2-5 autonomous tasks. The default 3h cadence
+(~8 passes/day) is calibrated for the $20/month budget. Tighten carefully.
 Monitor `openclaw gateway status` for 429s in the first hour after tightening.
 
 **Document every cadence change** in the Observed Cadence Log table above.

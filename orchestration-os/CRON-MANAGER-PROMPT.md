@@ -269,9 +269,10 @@ STOP.
 ```bash
 openclaw cron add \
   --name "nightclaw-manager-trigger" \
-  --every 105m \
+  --every 24h \
   --session "session:nightclaw-manager" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-sonnet-4-6
 ```

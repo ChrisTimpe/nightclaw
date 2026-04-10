@@ -30,7 +30,7 @@
 
 ## The always-on system in one paragraph
 
-Two crons run permanently: a **worker pulse** (every 60 min, custom session) and a **manager pulse** (every 105 min, custom session). Both are project-agnostic — they read `ACTIVE-PROJECTS.md` to determine what to work on. Adding a project = adding a row to that file. Shifting focus = changing priority numbers. Pausing = setting status to "paused". The crons never stop; the dispatch table controls what they do. See `orchestration-os/OPS-CRON-SETUP.md` for setup.
+Two crons run permanently: a **worker pulse** (every 3h on Haiku, custom session) and a **manager pulse** (once per day on Sonnet, custom session). Both are project-agnostic — they read `ACTIVE-PROJECTS.md` to determine what to work on. Adding a project = adding a row to that file. Shifting focus = changing priority numbers. Pausing = setting status to "paused". The crons never stop; the dispatch table controls what they do. See `orchestration-os/OPS-CRON-SETUP.md` for setup.
 
 ## Each long-running project in one paragraph
 

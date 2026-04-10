@@ -227,9 +227,10 @@ STOP. Do not begin another pass.
 ```bash
 openclaw cron add \
   --name "nightclaw-worker-trigger" \
-  --every 60m \
+  --every 3h \
   --session "session:nightclaw-worker" \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
-  --no-deliver
+  --no-deliver \
+  --model anthropic/claude-haiku-3-5
 ```
