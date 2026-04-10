@@ -184,9 +184,26 @@ T8  AUDIT REVIEW + OS IMPROVEMENT  (mandatory every cycle)
   CRITICAL: audit/AUDIT-LOG.md is APPEND-ONLY. Every write to this file must append a new line.
   Never overwrite, truncate, or rewrite existing content. Use file append — not file write.
 
-  CRITICAL: NOTIFICATIONS.md is APPEND-ONLY. Every write to this file must append new entries
-  at the bottom. Never overwrite, truncate, or replace the file content. Preserve all existing
-  entries. Use file append — not file write.
+  NOTIFICATIONS.md is APPEND-ONLY for new entries. Never overwrite, truncate, or replace
+  existing content when adding new entries. Use file append — not file write.
+  Exception: T8.3 NOTIFICATIONS PRUNING below may move resolved entries to archive.
+
+  T8.3  NOTIFICATIONS PRUNING (every cycle)
+    READ NOTIFICATIONS.md top to bottom.
+    Identify entries that meet ANY of these criteria:
+      - Marked [DONE] by worker (resolved at T1.5)
+      - Priority: INFO and older than 7 days
+      - Priority: LOW and older than 14 days
+      - Priority: MEDIUM|HIGH|CRITICAL and older than 30 days
+      - Any entry older than 90 days regardless of priority
+    For each qualifying entry:
+      1. APPEND the entry verbatim to NOTIFICATIONS-ARCHIVE.md
+         (create file if it does not exist)
+      2. Remove the entry from NOTIFICATIONS.md
+    Preserve all non-qualifying entries in their original order.
+    Preserve the file header (lines above "## Current Alerts") unchanged.
+    Log: TASK:[run_id].T8.3 | TYPE:NOTIFICATIONS_PRUNE | MOVED:[n] | REMAINING:[n]
+    If no entries qualify: skip silently. Do not log.
 
   REGISTRY SELF-CONSISTENCY (monthly or when REGISTRY.md modified):
     SCR-01 through SCR-06 from REGISTRY.md R6.
