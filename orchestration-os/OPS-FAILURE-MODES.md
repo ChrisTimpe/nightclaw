@@ -759,6 +759,35 @@ openclaw --version
 
 ---
 
+### FM-035
+**Name:** heartbeat-token-drain
+
+**Symptom:** API token consumption is far higher than expected given the number of cron passes and interactive sessions. Costs continue accumulating even when no projects are active and no interactive sessions are open. Debug logs show heartbeat runs firing frequently with high token counts.
+
+**Root cause:** OpenClaw's default heartbeat configuration runs every 30 minutes using the agent's default model (often Sonnet-class) with full conversation history and all workspace bootstrap files. Each tick consumes 50-100K+ input tokens for checks that almost always return `HEARTBEAT_OK`. At 48 ticks/day, heartbeat alone can exceed all cron and interactive token spend combined. Compounding factors: (1) HEARTBEAT.md containing cron trigger routing that executes full worker/manager passes in the main session context instead of dedicated cron sessions, (2) `isolatedSession` and `lightContext` not enabled, (3) no `activeHours` restriction allowing 24/7 ticks including overnight.
+
+**Detection signal:** Check `openclaw config get agents.defaults.heartbeat` — if `model` is unset or set to a Sonnet/Opus-class model, `lightContext` is false or missing, `isolatedSession` is false or missing, and `every` is 30m or less, this is the likely cause. Confirm by checking gateway logs for heartbeat frequency and token counts per tick.
+
+**Fix:**
+1. Disable heartbeat immediately to stop the bleed: `openclaw system heartbeat disable`
+2. Reconfigure with cost-optimized settings:
+   - `openclaw config set agents.defaults.heartbeat.every "60m"`
+   - `openclaw config set agents.defaults.heartbeat.model "anthropic/claude-haiku-3-5"` (or equivalent cheap model)
+   - `openclaw config set agents.defaults.heartbeat.lightContext true`
+   - `openclaw config set agents.defaults.heartbeat.isolatedSession true`
+3. Restart gateway: `openclaw gateway stop && openclaw gateway`
+4. Re-enable heartbeat: `openclaw system heartbeat enable`
+5. Verify config: `openclaw config get agents.defaults.heartbeat`
+6. Remove any "Cron Trigger Handling" section from HEARTBEAT.md that routes `WORKER_PASS_DUE` or `MANAGER_PASS_DUE` events — cron passes run in their own dedicated sessions and should never execute through the heartbeat
+
+**Prevention:** Configure heartbeat settings in `openclaw.json` at install time, before enabling crons. See DEPLOY.md "Heartbeat Configuration" section. NightClaw's HEARTBEAT.md should contain only lightweight checks (notifications, cron health, inbox triage) — never full cron pass routing. The cron worker and manager have their own dedicated sessions with `--light-context` and `--no-deliver`.
+
+**Status:** ACTIVE
+**Added:** 2026-04-10
+**Source:** Production incident — heartbeat running on Sonnet 4.6 at default 30m interval with full session context caused runaway token consumption
+
+---
+
 ## Registry Maintenance
 
 ### How to Add a New Failure Mode

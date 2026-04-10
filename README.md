@@ -16,7 +16,7 @@ You configure a domain focus. You go to sleep. NightClaw runs structured researc
 
 **Platform:** Any OS where OpenClaw runs — macOS, Ubuntu, Windows (WSL2), remote Linux server, cloud VM. There is nothing OS-specific in NightClaw itself. The install script requires `bash`, `sed`, `python3`, and `sha256sum` — all present by default on macOS and any Linux distribution.
 
-**Cost:** NightClaw itself is free (MIT). Running it costs only your LLM API tokens — Ollama works at zero cost for evaluation; Claude Sonnet 4.5 or GPT-5 class models are recommended for autonomous production passes. Token baseline: ~2,400 tokens per cron pass startup + ~6,900 session floor (SOUL + AGENTS + WORKING + ACTIVE-PROJECTS). See DEPLOY.md for full budget guidance.
+**Cost:** NightClaw itself is free (MIT). Running it costs only your LLM API tokens — Ollama works at zero cost for evaluation; Claude Sonnet 4.5 or GPT-5 class models are recommended for autonomous production passes. Token baseline: ~2,400 tokens per cron pass startup + ~6,900 session floor (SOUL + AGENTS + WORKING + ACTIVE-PROJECTS). **Important:** OpenClaw's heartbeat runs separately from NightClaw's crons and can silently consume more tokens than all cron passes combined if left at default settings. See DEPLOY.md "Heartbeat Configuration" for recommended settings.
 
 **Web search:** OpenClaw's native search tool uses DuckDuckGo with a hard limit of ~10–15 queries per session. This is sufficient for targeted research passes but will block under heavy query patterns. For higher-volume research workloads, configure the [SearXNG plugin](https://github.com/openclaw/openclaw/releases) (bundled in OpenClaw 2026.4.x) or a dedicated search API (Serper, Brave) in your OpenClaw setup before running research-heavy projects.
 
@@ -332,7 +332,7 @@ AGENTS-LESSONS.md          T7d lesson accumulation (STANDARD — written by agen
 IDENTITY.md                Agent persona template (filled on first run)
 USER.md                    Owner profile and domain restrictions
 MEMORY.md                  Long-term memory (auto-injected each session)
-HEARTBEAT.md               Periodic check-in and cron trigger routing
+HEARTBEAT.md               Lightweight periodic checks (notifications, cron health, inbox)
 WORKING.md                 Session briefing template
 ACTIVE-PROJECTS.md         Priority-ranked dispatch table
 LOCK.md                    Session lock — prevents concurrent cron writes (STANDARD)
