@@ -84,7 +84,7 @@ sed -i "s|PROJECTS/\[slug\]/LONGRUNNER.md|$LONGRUNNER_PATH|" "$LONGRUNNER_PATH"
 sed -i "s/started: \"\"/started: \"$TODAY\"/" "$LONGRUNNER_PATH"
 
 # Set initial status
-sed -i 's/status: "active"  # active | complete | blocked | abandoned/status: "active"/' "$LONGRUNNER_PATH"
+sed -i 's%status: "active"  # active | complete | blocked | abandoned%status: "active"%' "$LONGRUNNER_PATH"
 
 # --- Determine next priority ---
 # Find the highest current priority number and add 1

@@ -256,7 +256,7 @@ if [[ -f "ACTIVE-PROJECTS.md" ]]; then
         fi
     done < <(grep '|' ACTIVE-PROJECTS.md 2>/dev/null)
     if [[ $MISSING_LONGRUNNERS -eq 0 ]]; then
-        if ! grep -E '^\|' ACTIVE-PROJECTS.md 2>/dev/null | grep -qE '\|\s*(active|blocked|transition-hold|TRANSITION-HOLD)\s*\|'; then
+        if ! grep '^|' ACTIVE-PROJECTS.md 2>/dev/null | grep -qiE '\|\s*(active|blocked|transition-hold)\s*\|'; then
             check_pass "ACTIVE-PROJECTS.md: no active projects (idle mode)"
         fi
     fi

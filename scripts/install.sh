@@ -24,8 +24,14 @@ validate_input() {
     if [[ ! "$value" =~ ^[a-zA-Z0-9_./~-]+$ ]]; then
         error "$name contains invalid characters. Use only: a-z A-Z 0-9 _ - . / ~"
     fi
-    if [[ "$value" == *".."* ]]; then
+    if [[ "$value" =~ \.\.  ]]; then
         error "$name contains a path traversal sequence (..) which is not allowed"
+    fi
+    # Resolve to absolute path and verify it doesn't escape expected boundaries
+    local resolved
+    resolved=$(realpath -m "$value" 2>/dev/null || echo "$value")
+    if [[ "$resolved" != /* ]]; then
+        error "$name must resolve to an absolute path"
     fi
 }
 

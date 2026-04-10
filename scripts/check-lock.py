@@ -29,7 +29,15 @@ def is_stale(lock):
     status = lock.get("status", "released")
     if status != "locked":
         return True  # released = free
-    
+
+    # Crash-partial safety: any required field missing or sentinel value → treat as stale
+    _SENTINEL = ("", "—", "-", "~", "null", "None", "none")
+    required_fields = ["expires_at", "locked_at", "run_id", "holder"]
+    for field in required_fields:
+        val = lock.get(field, "")
+        if not val or val.strip() in _SENTINEL:
+            return True  # crash-partial = stale
+
     now = datetime.now(timezone.utc)
     
     # Missing or em-dash timestamps = unknown state = treat as stale (fail-safe)
