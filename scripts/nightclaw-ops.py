@@ -292,7 +292,7 @@ def cmd_scan_notifications():
             continue
 
         # Skip done entries
-        if line_stripped.startswith("[DONE]"):
+        if line_stripped.startswith("[DONE"):
             continue
         # Skip headers, empty lines, HTML comments, and separators
         if not line_stripped or line_stripped.startswith("#") or line_stripped.startswith("---"):
@@ -811,7 +811,7 @@ def cmd_prune_candidates():
             continue
 
         # Check [DONE]
-        if line_stripped.startswith("[DONE]"):
+        if line_stripped.startswith("[DONE"):
             candidates.append((line_num, "done_marker", line_stripped[:80]))
             continue
 

@@ -291,7 +291,7 @@ cmd_alerts() {
                 in_alerts=true
                 continue
             fi
-            $in_alerts && [[ -n "$line" ]] && echo "  $line"
+            $in_alerts && [[ -n "$line" ]] && [[ ! "$line" == \[DONE* ]] && echo "  $line"
         done < "$NOTIFICATIONS"
         echo ""
         return
