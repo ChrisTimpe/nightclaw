@@ -574,7 +574,15 @@ cmd_arm() {
     fi
     [[ -n "$expires" ]] || error "Could not calculate default expiry. Provide one: nightclaw-admin arm $pa_id YYYY-MM-DD"
 
+    # --- Atomic arm: backup → write → re-sign → cleanup ---
+    # OPS-PREAPPROVAL.md is PROTECTED. If we change it without re-signing,
+    # the next cron T0 integrity check will HALT. Backup ensures rollback.
+
+    local backup="${PREAPPROVAL}.bak"
+    cp "$PREAPPROVAL" "$backup"
+
     # Update Status: INACTIVE → ACTIVE and set Expires
+    local write_result=0
     python3 -c "
 import sys, re
 
@@ -585,7 +593,6 @@ filepath = sys.argv[3]
 with open(filepath, 'r') as f:
     content = f.read()
 
-# Match the PA header line and update status + expires
 pattern = r'(## ' + re.escape(pa_id) + r' \| Status: )\w+( \| Expires: ).*'
 replacement = r'\g<1>ACTIVE\g<2>' + expires
 
@@ -596,17 +603,28 @@ if count == 0:
 
 with open(filepath, 'w') as f:
     f.write(new_content)
+" "$pa_id" "$expires" "$PREAPPROVAL" > /dev/null || write_result=$?
 
-print(f'UPDATED:{pa_id}:ACTIVE:expires={expires}')
-" "$pa_id" "$expires" "$PREAPPROVAL" > /dev/null
+    if [[ $write_result -ne 0 ]]; then
+        mv "$backup" "$PREAPPROVAL"
+        error "Failed to update $PREAPPROVAL. Rolled back."
+    fi
 
-    # Re-sign (PROTECTED file)
+    # Re-sign (PROTECTED file) — if this fails, restore backup
+    local sign_result=0
     if [[ -x scripts/resign.sh ]]; then
-        bash scripts/resign.sh "$PREAPPROVAL" > /dev/null 2>&1
+        bash scripts/resign.sh "$PREAPPROVAL" > /dev/null 2>&1 || sign_result=$?
+        if [[ $sign_result -ne 0 ]]; then
+            mv "$backup" "$PREAPPROVAL"
+            error "Re-sign failed. Rolled back $PREAPPROVAL to prevent integrity halt."
+        fi
         info "Re-signed $PREAPPROVAL"
     else
-        warn "resign.sh not found — run manually: bash scripts/resign.sh $PREAPPROVAL"
+        mv "$backup" "$PREAPPROVAL"
+        error "resign.sh not found. Rolled back — cannot arm without re-signing a PROTECTED file."
     fi
+
+    rm -f "$backup"
 
     change_log "FILE:${PREAPPROVAL}#${pa_id}.status" "INACTIVE" "ACTIVE" "owner armed via nightclaw-admin, expires $expires"
     audit_log "TYPE:ADMIN_ARM | RESULT:SUCCESS | PA:$pa_id | EXPIRES:$expires"
@@ -621,6 +639,11 @@ cmd_disarm() {
 
     grep -q "^## $pa_id " "$PREAPPROVAL" || error "$pa_id not found in OPS-PREAPPROVAL.md"
 
+    # --- Atomic disarm: backup → write → re-sign → cleanup ---
+    local backup="${PREAPPROVAL}.bak"
+    cp "$PREAPPROVAL" "$backup"
+
+    local write_result=0
     python3 -c "
 import sys, re
 
@@ -640,17 +663,28 @@ if count == 0:
 
 with open(filepath, 'w') as f:
     f.write(new_content)
+" "$pa_id" "$PREAPPROVAL" > /dev/null || write_result=$?
 
-print(f'UPDATED:{pa_id}:INACTIVE')
-" "$pa_id" "$PREAPPROVAL" > /dev/null
+    if [[ $write_result -ne 0 ]]; then
+        mv "$backup" "$PREAPPROVAL"
+        error "Failed to update $PREAPPROVAL. Rolled back."
+    fi
 
-    # Re-sign (PROTECTED file)
+    # Re-sign (PROTECTED file) — if this fails, restore backup
+    local sign_result=0
     if [[ -x scripts/resign.sh ]]; then
-        bash scripts/resign.sh "$PREAPPROVAL" > /dev/null 2>&1
+        bash scripts/resign.sh "$PREAPPROVAL" > /dev/null 2>&1 || sign_result=$?
+        if [[ $sign_result -ne 0 ]]; then
+            mv "$backup" "$PREAPPROVAL"
+            error "Re-sign failed. Rolled back $PREAPPROVAL to prevent integrity halt."
+        fi
         info "Re-signed $PREAPPROVAL"
     else
-        warn "resign.sh not found — run manually: bash scripts/resign.sh $PREAPPROVAL"
+        mv "$backup" "$PREAPPROVAL"
+        error "resign.sh not found. Rolled back — cannot disarm without re-signing a PROTECTED file."
     fi
+
+    rm -f "$backup"
 
     change_log "FILE:${PREAPPROVAL}#${pa_id}.status" "ACTIVE" "INACTIVE" "owner disarmed via nightclaw-admin"
     audit_log "TYPE:ADMIN_DISARM | RESULT:SUCCESS | PA:$pa_id"
