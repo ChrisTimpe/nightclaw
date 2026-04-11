@@ -13,6 +13,35 @@ All notable changes to NightClaw will be documented here.
 
 ---
 
+## v0.2.1 — Safe Append for APPEND-ONLY Files
+
+**Released:** 2026-04-11
+
+### Fixes
+- **Edit tool failure on AUDIT-LOG.md**: Manager cron crashed when using the platform Edit tool (diff-based) to append to growing log files. The Edit tool requires unique string matches which fail on repetitive append-only files like AUDIT-LOG.md.
+
+### New: nightclaw-ops.py append commands
+- **append** — Appends a single line to an APPEND-ONLY file via exec, bypassing the Edit tool entirely
+- **append-batch** — Appends multiple lines (||| delimited) in a single call for bundle writes
+- Both commands enforce an allowlist matching REGISTRY.md R3 APPEND-tier files
+- Allowed targets: audit/AUDIT-LOG.md, audit/SESSION-REGISTRY.md, audit/CHANGE-LOG.md, audit/APPROVAL-CHAIN.md, NOTIFICATIONS.md, NOTIFICATIONS-ARCHIVE.md, AGENTS-LESSONS.md, memory/YYYY-MM-DD.md
+- Denied targets return ERROR:DENIED with the allowlist for diagnosis
+
+### Enhancements
+- **CRON-WORKER-PROMPT.md** — All "Append to" / "Log:" instructions replaced with explicit `python3 scripts/nightclaw-ops.py append` exec calls
+- **CRON-MANAGER-PROMPT.md** — All "Append to" / "APPEND to" instructions replaced with explicit `python3 scripts/nightclaw-ops.py append` exec calls
+- **CRON-HARDLINES.md** — Added mandatory tool usage rule: APPEND-ONLY files must use the append script, never Edit or WriteFile
+- **REGISTRY.md** — Updated ops description to include safe file appends
+- **INTEGRITY-MANIFEST.md** — Re-signed 4 protected files for v0.2.1
+
+### Upgrade Notes
+- Copy `scripts/nightclaw-ops.py` to live workspace (Category A — safe overwrite)
+- Copy updated CRON-WORKER-PROMPT.md, CRON-MANAGER-PROMPT.md, CRON-HARDLINES.md, REGISTRY.md (Category C — re-sign after)
+- Re-sign integrity manifest for all 4 changed protected files
+- Delete existing worker and manager sessions so next trigger picks up new instructions
+
+---
+
 ## v0.2.0 — Deterministic Operations + Owner CLI
 
 **Released:** 2026-04-10

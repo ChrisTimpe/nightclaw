@@ -1,5 +1,5 @@
 # CRON-WORKER-PROMPT.md — NightClaw Worker
-# v0.1.0 | One pass. One objective. Structured. Audited. Then stop.
+# v0.2.1 | One pass. One objective. Structured. Audited. Then stop.
 # Requires: --session "session:nightclaw-worker" --light-context --no-deliver
 
 ---
@@ -17,8 +17,8 @@ STARTUP — execute in this exact order before T0
      IF output starts with DEFER:
        Parse holder, run_id, expires from the output.
        Output: "[LOCK] Active lock detected. Holder: [holder]. Expires: [expires]. Deferring."
-       Append to audit/AUDIT-LOG.md: TASK:[tentative-run_id].STARTUP | TYPE:LOCK_CHECK | RESULT:BLOCKED_BY:[run_id] | HOLDER:[holder]
-       Append LOW to NOTIFICATIONS.md: "Worker startup deferred — [holder] holds lock (expires [expires])."
+       Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[tentative-run_id].STARTUP | TYPE:LOCK_CHECK | RESULT:BLOCKED_BY:[run_id] | HOLDER:[holder]
+       Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: LOW | Project: system | Status: WORKER-DEFERRED \nWorker startup deferred — [holder] holds lock (expires [expires]).
        EXIT cleanly. Do NOT proceed to step 1 or T0.
 
      IF output starts with PROCEED:
@@ -27,13 +27,13 @@ STARTUP — execute in this exact order before T0
          Set consecutive_pass_failures = FAILURES + 1.
          Execute: python3 scripts/nightclaw-ops.py crash-context [STALE_RUN]
          Parse the crash context output. Note PROJECT, LAST_OBJECTIVE, RECOMMENDATION.
-         Append to audit/AUDIT-LOG.md: TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n] | CRASHED_PROJECT:[project] | CRASHED_OBJECTIVE:[objective]
+         Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n] | CRASHED_PROJECT:[project] | CRASHED_OBJECTIVE:[objective]
          IF RECOMMENDATION=ESCALATE:
-           Append HIGH to NOTIFICATIONS.md: "Repeat crash on [project]. Objective: [objective]. Human review needed."
-         IF consecutive_pass_failures >= 3: append MEDIUM to NOTIFICATIONS.md:
-           "session:nightclaw-worker has failed [n] consecutive passes. Check logs for crash pattern."
-         IF consecutive_pass_failures >= 5: append HIGH to NOTIFICATIONS.md:
-           "session:nightclaw-worker has failed [n] consecutive passes. Human review needed."
+           Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: HIGH | Project: [project] | Status: REPEAT-CRASH \nRepeat crash on [project]. Objective: [objective]. Human review needed.
+         IF consecutive_pass_failures >= 3:
+           Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: system | Status: CONSECUTIVE-FAILURES \nsession:nightclaw-worker has failed [n] consecutive passes. Check logs for crash pattern.
+         IF consecutive_pass_failures >= 5:
+           Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: HIGH | Project: system | Status: CONSECUTIVE-FAILURES \nsession:nightclaw-worker has failed [n] consecutive passes. Human review needed.
        OVERWRITE LOCK.md:
          status: locked
          holder: session:nightclaw-worker
@@ -62,7 +62,7 @@ T0  INTEGRITY CHECK
   Output is one line per file (PASS/FAIL/MISSING) plus a summary line.
   The script output is authoritative. Do not recompute hashes yourself.
 
-  RESULT:PASS → TASK:[run_id].T0 | TYPE:INTEGRITY_CHECK | RESULT:PASS | FILES:[count from script output]
+  RESULT:PASS → Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T0 | TYPE:INTEGRITY_CHECK | RESULT:PASS | FILES:[count from script output]
   RESULT:FAIL → execute BUNDLE:integrity_fail → HALT
          (BUNDLE:integrity_fail releases LOCK.md before halting. T9 does NOT run after integrity failure.)
 
@@ -88,7 +88,7 @@ T1.5  NOTIFICATIONS CHECK + IDLE TRIAGE (runs ONLY when T1 found no active proje
     Take the first (oldest) FOUND entry. Note the line number.
     READ NOTIFICATIONS.md at that line to get the full entry content.
     Execute the entry's action as this pass's objective.
-    Log: TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:notifications | OBJECTIVE:[one-line summary of entry]
+    Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:notifications | OBJECTIVE:[one-line summary of entry]
     After execution, mark the entry DONE in NOTIFICATIONS.md (prepend [DONE] to the line).
     Go to T9.
 
@@ -150,21 +150,21 @@ T3  TOOL CHECK
   IF YES: READ orchestration-os/REGISTRY.md full (~4,161 tokens)
           Run PRE-WRITE PLAN: for each planned write, grep R4 for downstream nodes.
           Flag PROTECTED downstream nodes → six-frame review required (SOUL.md §1b).
-          Log IMPACT_PLAN first: TASK:[run_id].PRE | TYPE:IMPACT_PLAN | TARGETS:[nodes] | DOWNSTREAM:[nodes]
+          Log IMPACT_PLAN first: Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].PRE | TYPE:IMPACT_PLAN | TARGETS:[nodes] | DOWNSTREAM:[nodes]
           Then for each PROTECTED downstream node, log SFR before writing:
-          TASK:[run_id].SFR | TYPE:IMPACT_PLAN | TARGET:[file] | FRAMES:op=[G/Y/R],integrity=[G/Y/R],dep=[G/Y/R],state=[G/Y/R],token=[G/Y/R],failure=[G/Y/R] | VERDICT:[GREEN|YELLOW|RED] | RESULT:[PROCEED|BLOCKED]
+          Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].SFR | TYPE:IMPACT_PLAN | TARGET:[file] | FRAMES:op=[G/Y/R],integrity=[G/Y/R],dep=[G/Y/R],state=[G/Y/R],token=[G/Y/R],failure=[G/Y/R] | VERDICT:[GREEN|YELLOW|RED] | RESULT:[PROCEED|BLOCKED]
   IF NO:  SKIP. Already have R3+R5 from startup.
 
 ─────────────────────────────────────────────
 T4  EXECUTE PASS
 ─────────────────────────────────────────────
-  TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:[slug] | OBJECTIVE:[one-line summary]
-  ← Write this FIRST before any execution. Proves T4 started even if crash follows.
+  Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T4 | TYPE:CHECKPOINT | PROJECT:[slug] | OBJECTIVE:[one-line summary]
+  ← Execute this FIRST before any execution. Proves T4 started even if crash follows.
 
   Execute next_pass.objective. One objective. Write outputs as you go.
   Monitor context usage. If approaching context_budget:
     Stop execution. Write partial results. Set next_pass to continue from checkpoint.
-    Log: TASK:[run_id].T4 | TYPE:CHECKPOINT | RESULT:BUDGET-REACHED | PROGRESS:[summary]
+    Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T4 | TYPE:CHECKPOINT | RESULT:BUDGET-REACHED | PROGRESS:[summary]
     Proceed to T5 with partial output.
 
   FOR EVERY FILE WRITE:
@@ -172,14 +172,13 @@ T4  EXECUTE PASS
     APPEND  → write immediately.
     STANDARD → confirm within LONGRUNNER scope → write.
     PROTECTED → {OWNER} authorization required → six-frame review (SOUL.md §1b) → log SFR to AUDIT-LOG → write → re-sign notification.
-    After every write: TASK:[run_id].T4.[n] | TYPE:FILE_WRITE | FILE:[path] | BUNDLE:[name] | RESULT:SUCCESS
+    After every write: Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T4.[n] | TYPE:FILE_WRITE | FILE:[path] | BUNDLE:[name] | RESULT:SUCCESS
 
   FOR EVERY FIELD VALUE CHANGE (old ≠ new):
-    Immediately append to audit/CHANGE-LOG.md:
-    [field_path]|[old]|[new]|worker|[run_id]|[ISO8601Z]|[ISO8601Z]|[reason]|[bundle]
+    Execute: python3 scripts/nightclaw-ops.py append audit/CHANGE-LOG.md [field_path]|[old]|[new]|worker|[run_id]|[ISO8601Z]|[ISO8601Z]|[reason]|[bundle]
 
   FOR EVERY EXEC COMMAND:
-    TASK:[run_id].T4.[n] | TYPE:EXEC | AUTH:[PA-NNN|implicit] | RESULT:[SUCCESS|FAIL] | CMD:[exact]
+    Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T4.[n] | TYPE:EXEC | AUTH:[PA-NNN|implicit] | RESULT:[SUCCESS|FAIL] | CMD:[exact]
 
 ─────────────────────────────────────────────
 T5  VALIDATE
@@ -189,7 +188,8 @@ T5  VALIDATE
 
 T5.5  QUALITY
   Q1 Expert: non-obvious finding?  Q2 Durable Asset: reusable artifact?  Q3 Compounding: next_pass more specific?
-  STRONG/ADEQUATE/WEAK → LONGRUNNER last_pass.quality.  WEAK → surface one-liner to NOTIFICATIONS.md.
+  STRONG/ADEQUATE/WEAK → LONGRUNNER last_pass.quality.
+  WEAK → Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: [slug] | Status: QUALITY-WEAK \n[one-liner quality note]
   FAIL → set next_pass to retry different approach.
 
 ─────────────────────────────────────────────
@@ -240,13 +240,22 @@ T9  SESSION CLOSE  ← MANDATORY. Always execute. No exceptions.
   Exception: integrity failure at T0 halts via BUNDLE:integrity_fail (which releases LOCK.md) — T9 does not run.
 
   BUNDLE:session_close executes these writes in order:
-  1. APPEND to audit/SESSION-REGISTRY.md: run_id, session, outcome
-  2. APPEND to memory/YYYY-MM-DD.md: structured pass log
-  3. APPEND to audit/AUDIT-LOG.md: TASK:[run].T9 TYPE:SESSION_CLOSE RESULT:SUCCESS
+  1. Execute: python3 scripts/nightclaw-ops.py append audit/SESSION-REGISTRY.md [session registry entry]
+  2. Execute: python3 scripts/nightclaw-ops.py append memory/YYYY-MM-DD.md [structured pass log]
+  3. Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run].T9 | TYPE:SESSION_CLOSE | RESULT:SUCCESS
   4. OVERWRITE LOCK.md: status=released, all other fields —
 
   The lock MUST be released at step 4. A pass that ends without releasing the lock
   will block all subsequent passes until the 20-minute stale window expires.
+
+  APPEND-ONLY FILES — MANDATORY TOOL USAGE:
+  Never use the Edit tool or WriteFile tool for APPEND-ONLY files.
+  Always use: python3 scripts/nightclaw-ops.py append <file> <line>
+  Or for multiple lines: python3 scripts/nightclaw-ops.py append-batch <file> <line1> ||| <line2>
+  The script enforces the allowlist — only APPEND-tier files in REGISTRY.md R3 are accepted.
+  This applies to: audit/AUDIT-LOG.md, audit/SESSION-REGISTRY.md, audit/CHANGE-LOG.md,
+  audit/APPROVAL-CHAIN.md, NOTIFICATIONS.md, NOTIFICATIONS-ARCHIVE.md, AGENTS-LESSONS.md,
+  and memory/YYYY-MM-DD.md.
 
 STOP. Do not begin another pass.
 ```

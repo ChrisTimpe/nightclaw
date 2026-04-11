@@ -233,6 +233,10 @@ This section is maintained by contributors. When a PR modifies a protected file,
 | v0.2.0 | `orchestration-os/CRON-WORKER-PROMPT.md` | T1 dispatch routes through `nightclaw-ops.py` commands (scan-notifications rewrite, 5 new ops commands) | Re-sign manifest after pulling |
 | v0.2.0 | `orchestration-os/CRON-MANAGER-PROMPT.md` | Manager dispatch routes through `nightclaw-ops.py` commands | Re-sign manifest after pulling |
 | v0.2.0 | `orchestration-os/REGISTRY.md` | R2 read-contracts added for ops commands; CL5 count updated | Re-sign manifest after pulling |
+| v0.2.1 | `orchestration-os/CRON-WORKER-PROMPT.md` | All APPEND-ONLY writes routed through `nightclaw-ops.py append` (eliminates Edit tool failures on log files) | Re-sign manifest; delete worker session |
+| v0.2.1 | `orchestration-os/CRON-MANAGER-PROMPT.md` | All APPEND-ONLY writes routed through `nightclaw-ops.py append` (eliminates Edit tool failures on log files) | Re-sign manifest; delete manager session |
+| v0.2.1 | `orchestration-os/CRON-HARDLINES.md` | Added mandatory tool usage rule for append-only files | Re-sign manifest |
+| v0.2.1 | `orchestration-os/REGISTRY.md` | Updated ops description to include safe file appends | Re-sign manifest |
 
 ---
 
