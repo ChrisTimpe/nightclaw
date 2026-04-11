@@ -16,7 +16,9 @@ You configure a domain focus. You go to sleep. NightClaw runs structured researc
 
 **Platform:** Any OS where OpenClaw runs — macOS, Ubuntu, Windows (WSL2), remote Linux server, cloud VM. There is nothing OS-specific in NightClaw itself. The install script requires `bash`, `sed`, `python3`, and `sha256sum` — all present by default on macOS and any Linux distribution.
 
-**Cost:** NightClaw itself is free (MIT). Running it costs only your LLM API tokens — Ollama works at zero cost for evaluation; Claude Sonnet 4.5 or GPT-5 class models are recommended for autonomous production passes. Token baseline: ~2,400 tokens per cron pass startup + ~6,900 session floor (SOUL + AGENTS + WORKING + ACTIVE-PROJECTS). **Important:** OpenClaw's heartbeat runs separately from NightClaw's crons and can silently consume more tokens than all cron passes combined if left at default settings. See DEPLOY.md "Heartbeat Configuration" for recommended settings.
+**Cost:** NightClaw itself is free (MIT). Running it costs only your LLM API tokens — Ollama works at zero cost for evaluation; Claude Sonnet 4.5 or GPT-5 class models are recommended for autonomous production passes. Token baseline: ~2,400 tokens per cron pass startup + ~6,900 session floor (SOUL + AGENTS + WORKING + ACTIVE-PROJECTS). v0.2.0 reduces daily cost ~30-40% through deterministic ops commands that replace LLM file reads with structured script output. **Important:** OpenClaw's heartbeat runs separately from NightClaw's crons and can silently consume more tokens than all cron passes combined if left at default settings. See DEPLOY.md "Heartbeat Configuration" for recommended settings.
+
+**Owner management is zero-token.** The `nightclaw-admin` CLI handles all routine owner interactions — approving drafts, pausing projects, setting priorities, injecting guidance, arming overnight pre-approvals — as deterministic shell commands. No LLM session needed. Every write logs to the same audit trail the crons use. An LLM session is only needed when you want the model to actually reason about something.
 
 **Web search:** OpenClaw's native search tool uses DuckDuckGo with a hard limit of ~10–15 queries per session. This is sufficient for targeted research passes but will block under heavy query patterns. For higher-volume research workloads, configure the [SearXNG plugin](https://github.com/openclaw/openclaw/releases) (bundled in OpenClaw 2026.4.x) or a dedicated search API (Serper, Brave) in your OpenClaw setup before running research-heavy projects.
 
@@ -30,6 +32,15 @@ You configure a domain focus. You go to sleep. NightClaw runs structured researc
 | `ACTIVE-PROJECTS.md` | What the agent is working on and at what priority — edit this to shift focus |
 | `PROJECTS/[slug]/LONGRUNNER.md` | Per-project control file: current phase, last pass, next pass objective, blockers |
 | `memory/YYYY-MM-DD.md` | Structured log of what each pass actually did, written by the agent |
+
+**What you actually run each morning:**
+
+```bash
+nightclaw-admin status     # projects, lock state, pending drafts
+nightclaw-admin alerts     # unresolved notifications needing your input
+nightclaw-admin approve <slug>   # or: decline, pause, priority, guide
+nightclaw-admin log 10     # recent audit entries
+```
 
 **Already have OpenClaw running?** See [Adding NightClaw to an Existing Workspace](#adding-nightclaw-to-an-existing-workspace) below.
 
@@ -134,10 +145,20 @@ Concretely, OpenClaw ships with cron scheduling and LLM sessions. There is no na
 - Novel blockers appended as new failure modes at T7d — the knowledge base grows from production experience so the same wall is never hit twice
 - Quality gate (three-question test) preventing low-value output from being marked complete
 
+**Zero-token owner CLI (`nightclaw-admin`):**
+- All routine management from the terminal — no LLM session, no tokens, no cost
+- `approve` / `decline` — respond to worker draft proposals with atomic write safety (rollback on partial failure)
+- `pause` / `unpause` / `priority` — shift focus without opening a session
+- `guide` — inject owner direction into the next worker pass
+- `arm` / `disarm` — toggle pre-approval rules with automatic integrity manifest re-signing
+- `status` / `alerts` / `log` — full system visibility as read-only commands
+- `done` — resolve notifications after review
+- Every write command logs to `audit/AUDIT-LOG.md` and `audit/CHANGE-LOG.md` with `[ADMIN-CLI]` actor tag — same audit trail as cron sessions
+
 **Human proposal surface and approval workflow:**
 - Agent surfaces enhancement proposals to NOTIFICATIONS.md — non-blocking, async
 - System continues working on everything it can while proposals await review
-- Owner reviews at their own cadence (morning check is the natural touchpoint)
+- Owner reviews at their own cadence — morning check via `nightclaw-admin status` and `nightclaw-admin alerts`
 - Pre-approval system for pre-authorizing action classes before going offline
 - Model tiering: approved enhancements can specify a different (higher-capability) model — cost categorized separately from routine execution
 
@@ -395,7 +416,8 @@ scripts/validate.sh         Checks internal consistency (file references, regist
 scripts/resign.sh           Re-signs all protected files after manual edits (updates INTEGRITY-MANIFEST.md)
 scripts/upgrade.sh          Merges updated NightClaw files into an existing workspace without data loss
 scripts/new-project.sh      Scaffolds a new LONGRUNNER project directory from template
-scripts/nightclaw-admin.sh  Owner CLI — approve/decline/pause/guide/arm/status without tokens
+scripts/nightclaw-admin.sh  Owner CLI — 12 commands for zero-token workspace management (v0.2.0)
+scripts/nightclaw-ops.py    Deterministic ops commands — structured extraction replacing LLM file reads (v0.2.0)
 scripts/check-lock.py       Diagnostic — prints current LOCK.md state (manual use only; exec-blocked in cron)
 scripts/smoke-test.sh       First-run smoke test simulating a full new user setup in an isolated temp directory
 ```
