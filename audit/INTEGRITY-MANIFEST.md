@@ -17,8 +17,8 @@
 | `IDENTITY.md` | d73a06e70bea594354f66818587c7c689210505e7de7bb40be7d8ee4258ba2c1 | 2026-04-07 | nightclaw-sign-v0.1.0 |
 | `MEMORY.md` | 810d1d0023410d4780d10ad842b34a5631858d3009ff327120e312c795da0d22 | 2026-04-07 | nightclaw-sign-v0.1.0 |
 | `AGENTS-CORE.md` | 4f71016be01a97c9b4482c8d9791e75956c94d9405cf0a6654d70f9606573876 | 2026-04-07 | nightclaw-sign-v0.1.0 |
-| `orchestration-os/CRON-WORKER-PROMPT.md` | 2d354627a8c3ca0c0fde81ccf95219960215933fe46b41df74f51eba88e71433 | 2026-04-10 | nightclaw-sign-v0.2.0 |
-| `orchestration-os/CRON-MANAGER-PROMPT.md` | aa44e40951858fc6f508e4e978ee50f9dfcd661da49fa96fa5948ceb45648502 | 2026-04-10 | nightclaw-sign-v0.2.0 |
+| `orchestration-os/CRON-WORKER-PROMPT.md` | cc405b9e50e08d5af17a7c6bf134c3178d78df9a08190298cccde780b039f91f | 2026-04-10 | nightclaw-sign-v0.2.0 |
+| `orchestration-os/CRON-MANAGER-PROMPT.md` | 20ace9dbf3d4dee616d341e7c5b0401ba5e1c81f231a32f949035364b29f412b | 2026-04-10 | nightclaw-sign-v0.2.0 |
 | `orchestration-os/OPS-PREAPPROVAL.md` | 2ff3bcf8712e617e8c661e9f6cd41f607d9c35dc746208bc7ce73560ead49ff9 | 2026-04-07 | nightclaw-sign-v0.1.0 |
 | `orchestration-os/OPS-AUTONOMOUS-SAFETY.md` | 768cb8645d9ba567baac6cea2db059b7fe95692d70ab82733af63192ac240e6c | 2026-04-08 | nightclaw-sign-v0.1.0 |
 | `orchestration-os/CRON-HARDLINES.md` | 8226d01c069066d1411ffec66ec6252f443eb69b7d95d71351378b95549f8af8 | 2026-04-10 | nightclaw-sign-v0.2.0 |
