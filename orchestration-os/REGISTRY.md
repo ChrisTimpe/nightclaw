@@ -11,9 +11,12 @@
 # These three layers never overlap.
 #
 # Deterministic operations: scripts/nightclaw-ops.py replaces LLM reasoning with code
-# for all structured checks (integrity, dispatch, crash detection, pruning, SCR rules, etc.).
+# for all structured checks (integrity, dispatch, crash detection, pruning, SCR rules,
+# LONGRUNNER field extraction, idle cycle triage, strategic context pre-digestion,
+# T7 dedup matching, and crash recovery context).
 # Prompts call the script and act on its machine-parseable output. The LLM never does
-# computation that code can do — hashing, date math, set comparison, table parsing, grep.
+# computation that code can do — hashing, date math, set comparison, table parsing, grep,
+# YAML field extraction, file existence checks, or fuzzy text matching.
 #
 # Design model: NightClaw is an object model with cascade integrity, not a file collection.
 # This file is the schema. R1–R2 = object definitions and field contracts.
@@ -97,6 +100,43 @@ OBJ:NOTIFY | action_needed       | TEXT   | Y | NOT EMPTY                       
 OBJ:MANIFEST | filepath          | PATH   | Y | PK relative to workspace root     | -
 OBJ:MANIFEST | sha256            | HASH   | Y | exactly 64 hex chars              | -
 OBJ:MANIFEST | verified_by       | STRING | Y | {OWNER}-re-signed-vNN|nightclaw-manager | -
+
+OBJ:NOTIFY-ARCH | content        | TEXT   | Y | verbatim copy from NOTIFICATIONS.md | -
+OBJ:NOTIFY-ARCH | moved_by       | STRING | Y | manager:T8.3                      | -
+OBJ:NOTIFY-ARCH | moved_at       | ISO8601Z | Y | timestamp of prune action        | -
+
+OBJ:MEMORY   | date              | DATE   | Y | YYYY-MM-DD (filename stem)         | -
+OBJ:MEMORY   | session_log       | TEXT   | Y | structured pass log content        | -
+OBJ:MEMORY   | consolidation     | BOOL   | N | true if this is a dream pass output | default=false
+
+OBJ:REGISTRY | section           | ENUM   | Y | R1|R2|R3|R4|R5|R6|R7|CL1-CL6     | -
+OBJ:REGISTRY | entry_type        | ENUM   | Y | OBJ|FIELD|ROUTE|EDGE|BUNDLE|SCR|CL | -
+
+OBJ:TOOLREG  | date              | DATE   | Y | YYYY-MM-DD discovery date          | -
+OBJ:TOOLREG  | tool              | STRING | Y | tool name or path                  | -
+OBJ:TOOLREG  | constraint        | TEXT   | Y | description of constraint          | -
+OBJ:TOOLREG  | evidence          | TEXT   | Y | what triggered the discovery        | -
+OBJ:TOOLREG  | session           | STRING | Y | worker|manager|{OWNER} + context   | -
+
+OBJ:LESSONS  | date              | DATE   | Y | YYYY-MM-DD                         | -
+OBJ:LESSONS  | slug              | TOKEN  | N | short identifier for the lesson     | -
+OBJ:LESSONS  | observation       | TEXT   | Y | one sentence minimum               | -
+
+OBJ:LOCK     | status            | ENUM   | Y | locked|released                    | -
+OBJ:LOCK     | holder            | STRING | N | session:nightclaw-worker|session:nightclaw-manager|— | -
+OBJ:LOCK     | run_id            | TOKEN  | N | RUN-YYYYMMDD-NNN|—                 | FK→OBJ:RUN (when locked)
+OBJ:LOCK     | locked_at         | ISO8601Z | N | timestamp of lock acquisition    | -
+OBJ:LOCK     | expires_at        | ISO8601Z | N | locked_at + 20 minutes           | -
+OBJ:LOCK     | consecutive_pass_failures | INT | Y | 0 on clean release, incremented on stale clear | default=0
+
+OBJ:FM       | fm_id             | TOKEN  | Y | PK FM-NNN (sequential)             | -
+OBJ:FM       | name              | STRING | Y | kebab-case failure name            | -
+OBJ:FM       | symptom           | TEXT   | Y | observable behavior                | -
+OBJ:FM       | root_cause        | TEXT   | Y | why it happens                     | -
+OBJ:FM       | detection_signal  | TEXT   | Y | how to confirm the match           | -
+OBJ:FM       | fix               | TEXT   | Y | remediation steps                  | -
+OBJ:FM       | prevention        | TEXT   | N | how to prevent recurrence          | -
+OBJ:FM       | status            | ENUM   | Y | OPEN|MITIGATED|RESOLVED            | -
 
 ---
 
@@ -411,6 +451,7 @@ PROTECTED-PATHS:
   FILE:USER.md
   FILE:IDENTITY.md
   FILE:MEMORY.md
+  FILE:AGENTS-CORE.md
   FILE:orchestration-os/CRON-WORKER-PROMPT.md
   FILE:orchestration-os/CRON-MANAGER-PROMPT.md
   FILE:orchestration-os/OPS-PREAPPROVAL.md

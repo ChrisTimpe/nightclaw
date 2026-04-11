@@ -122,44 +122,43 @@ T3.5  STRATEGIC DIRECTION (idle state only)
 ─────────────────────────────────────────────
   This is the manager's highest-value work. When no projects are active,
   the manager is the strategic brain that sets direction for the worker.
-  The worker proposes projects (OPS-IDLE-CYCLE Tier 4). The manager
-  evaluates, refines, and approves them — or proposes its own.
 
-  Execute in order. Stop after the first action that produces output.
+  PRE-CHECK: Execute: python3 scripts/nightclaw-ops.py strategic-context
+  The script output tells you what exists (drafts, completions, memory count,
+  domain anchor age) and recommends which sub-step to execute.
+  Parse the RECOMMENDED line and follow its routing.
+  Do NOT read SOUL.md, USER.md, or memory files unless the recommended action
+  requires them. The script pre-digests what you need.
 
-  A. PENDING DRAFTS — check for worker-proposed projects awaiting review.
-     Search PROJECTS/*/LONGRUNNER-DRAFT.md for any existing drafts.
-     IF found:
-       READ the draft. READ SOUL.md Domain Anchor. READ USER.md constraints.
-       Evaluate: Is this aligned with domain focus? Is scope realistic for
-       the worker model? Is the stop condition machine-testable?
-       IF strong draft:
-         APPEND to NOTIFICATIONS.md (standalone, not via bundle) as HIGH:
-           "Manager recommends approving [slug]. Aligned with domain anchor.
-           Stop condition is testable. Ready for worker execution.
-           To approve: rename LONGRUNNER-DRAFT.md → LONGRUNNER.md, add row
-           to ACTIVE-PROJECTS.md, worker picks up on next pass."
-       IF weak draft:
-         APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
-           "Manager reviewed [slug] draft. Issues: [list]. Recommend revisions
-           before approval. Worker will revise on next idle cycle if directed."
-       Go to T8.
-
-  B. COMPLETED PROJECT REVIEW — learn from what just finished.
-     Search ACTIVE-PROJECTS.md for rows where status = complete.
-     IF any project completed in the last 30 days:
-       READ its LONGRUNNER.md — review outcomes, phases completed, lessons.
-       READ recent memory/ entries related to this project.
+  RECOMMENDED:T3.5-A → review the named draft slug.
+     Execute: python3 scripts/nightclaw-ops.py longrunner-extract <slug>
+     Read extracted fields. Only READ SOUL.md Domain Anchor if evaluating alignment.
+     IF strong draft:
+       APPEND to NOTIFICATIONS.md (standalone, not via bundle) as HIGH:
+         "Manager recommends approving [slug]. Aligned with domain anchor.
+         Stop condition is testable. Ready for worker execution.
+         To approve: rename LONGRUNNER-DRAFT.md → LONGRUNNER.md, add row
+         to ACTIVE-PROJECTS.md, worker picks up on next pass."
+     IF weak draft:
        APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
-         "[slug] completed. Key outcomes: [summary]. Suggested follow-on
-         directions: [2-3 concrete next project ideas derived from findings].
-         Worker will propose a draft if no direction given within 48 hours."
-       Go to T8.
+         "Manager reviewed [slug] draft. Issues: [list]. Recommend revisions
+         before approval. Worker will revise on next idle cycle if directed."
+     Go to T8.
 
-  C. DOMAIN ANCHOR REVIEW — is the strategic direction still right?
+  RECOMMENDED:T3.5-B → review the named completed project.
+     READ its LONGRUNNER.md — review outcomes, phases completed, lessons.
+     READ the most recent 2 memory/ entries (not all 5 — use strategic-context
+     MEMORY_ENTRIES count to decide if more are needed).
+     APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
+       "[slug] completed. Key outcomes: [summary]. Suggested follow-on
+       directions: [2-3 concrete next project ideas derived from findings].
+       Worker will propose a draft if no direction given within 48 hours."
+     Go to T8.
+
+  RECOMMENDED:T3.5-C → domain anchor review.
      READ SOUL.md Domain Anchor.
      READ USER.md for any updated constraints or interests.
-     READ the last 5 memory/ entries for patterns in what the system has been doing.
+     READ the last 3 memory/ entries for patterns.
      IF the domain anchor is stale, too broad, or misaligned with recent work:
        APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
          "Manager recommendation: Domain Anchor in SOUL.md may benefit from
@@ -173,7 +172,7 @@ T3.5  STRATEGIC DIRECTION (idle state only)
          pick this up as a Tier 4 proposal on next idle cycle."
      Go to T8.
 
-  D. NONE OF THE ABOVE — no drafts, no recent completions, anchor is current.
+  RECOMMENDED:T3.5-D → no action needed.
      APPEND one-liner to memory/YYYY-MM-DD.md (inline, not via bundle):
        "[T3.5] System idle. No strategic action needed."
      Go to T8.

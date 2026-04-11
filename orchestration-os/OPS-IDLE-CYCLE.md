@@ -143,9 +143,8 @@ Do NOT require all three conditions to be true simultaneously.
    ```
 
 **The owner's morning action (either path):**
-- Open main session. Agent surfaces the draft.
-- Say "approve [slug]" — agent renames draft to LONGRUNNER.md, adds row to ACTIVE-PROJECTS.md, worker picks up on next pass.
-- Say "decline" — agent deletes draft and asks what to work on instead.
+- From terminal (zero tokens): `nightclaw-admin approve <slug>` or `nightclaw-admin decline <slug>`
+- Or open main session — agent surfaces the draft, say "approve" or "decline".
 - No response needed at all if owner wants to define projects manually — draft sits inert until reviewed.
 
 ---

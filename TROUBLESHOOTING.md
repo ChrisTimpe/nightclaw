@@ -220,10 +220,39 @@ No action needed. A 1-cycle deferral (3h for worker, 24h for manager) is the des
 
 ---
 
+## nightclaw-admin CLI
+
+The `nightclaw-admin` CLI handles all routine management without spending tokens. Run from your workspace root:
+
+```bash
+bash scripts/nightclaw-admin.sh --help    # show all commands
+bash scripts/nightclaw-admin.sh status    # current state
+bash scripts/nightclaw-admin.sh alerts    # unresolved notifications
+```
+
+**Common issues:**
+
+- **"Cannot find NightClaw workspace"** — Run from your workspace root (`~/.openclaw/workspace/`) or set `NIGHTCLAW_ROOT` environment variable.
+- **arm/disarm fails to re-sign** — Ensure `scripts/resign.sh` exists and is executable. Run `chmod +x scripts/resign.sh`.
+- **approve says "No draft found"** — The draft must be at `PROJECTS/<slug>/LONGRUNNER-DRAFT.md`. Check the exact slug with `ls PROJECTS/`.
+- **Status shows no projects but ACTIVE-PROJECTS.md has rows** — The status command reads only the "Active Project Scoreboard" table. Rows must have a valid LONGRUNNER path in column 3.
+
+All admin commands log to `audit/AUDIT-LOG.md` and `audit/CHANGE-LOG.md` in the same format the cron sessions use.
+
+---
+
 ## Emergency Stop
 
 To halt all autonomous work immediately:
 
+```bash
+# Pause all projects at once
+for slug in $(grep -oP '(?<=\| )[a-z0-9-]+(?= \| PROJECTS/)' ACTIVE-PROJECTS.md); do
+  bash scripts/nightclaw-admin.sh pause "$slug"
+done
+```
+
+Or edit directly:
 ```bash
 nano ~/.openclaw/workspace/ACTIVE-PROJECTS.md
 # Set all project rows to: status: paused
@@ -231,4 +260,4 @@ nano ~/.openclaw/workspace/ACTIVE-PROJECTS.md
 
 The next cron pass reads ACTIVE-PROJECTS.md at T1 and finds nothing actionable. All work stops at the next cycle boundary (within 3 hours at most).
 
-To resume: change status back to `active`.
+To resume: `bash scripts/nightclaw-admin.sh unpause <slug>` or change status back to `active`.

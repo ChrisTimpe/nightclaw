@@ -24,7 +24,8 @@ NightClaw is not a library you update with a package manager. It is a **stateful
 
 ```bash
 # 1. Pause all projects — no cron passes during upgrade
-# Edit ACTIVE-PROJECTS.md: set all rows to status: paused
+# For each active project:
+nightclaw-admin pause [slug]
 
 # 2. Verify the system is idle
 openclaw cron list   # confirm both crons are still configured
@@ -67,6 +68,8 @@ VERSION
 scripts/install.sh
 scripts/validate.sh
 scripts/verify-integrity.sh
+scripts/nightclaw-admin.sh
+scripts/nightclaw-ops.py
 .github/
 ```
 
@@ -198,13 +201,16 @@ bash scripts/validate.sh
 ### Step 7 — Test one cron cycle before re-enabling all projects
 ```bash
 # Enable only one low-stakes project first
-# Edit ACTIVE-PROJECTS.md: set one row to status: active
+nightclaw-admin unpause [slug]
 
 # Force-run the worker
 openclaw cron run [worker-trigger-id]
 
 # Verify the pass log
 cat memory/$(date +%Y-%m-%d).md
+
+# Check status
+nightclaw-admin status
 
 # If clean: re-enable remaining projects
 ```
@@ -224,6 +230,9 @@ This section is maintained by contributors. When a PR modifies a protected file,
 | v0.001.1 | `orchestration-os/REGISTRY.md` | SFR type added to TASK enum with format spec | Re-sign manifest after pulling |
 | v0.001.1 | `orchestration-os/REGISTRY.md` | All BUNDLE audit log writes now say APPEND explicitly (FM-031 fix) | Re-sign manifest after pulling; run `sed -i 's/{OWNER}/[yourname]/g'` if pulled from zip |
 | v0.001.1 | `orchestration-os/CRON-MANAGER-PROMPT.md` | T8 now includes explicit APPEND-ONLY callout for audit/AUDIT-LOG.md (FM-031 fix) | Re-sign manifest after pulling; run `sed -i 's/{OWNER}/[yourname]/g'` if pulled from zip |
+| v0.2.0 | `orchestration-os/CRON-WORKER-PROMPT.md` | T1 dispatch routes through `nightclaw-ops.py` commands (scan-notifications rewrite, 5 new ops commands) | Re-sign manifest after pulling |
+| v0.2.0 | `orchestration-os/CRON-MANAGER-PROMPT.md` | Manager dispatch routes through `nightclaw-ops.py` commands | Re-sign manifest after pulling |
+| v0.2.0 | `orchestration-os/REGISTRY.md` | R2 read-contracts added for ops commands; CL5 count updated | Re-sign manifest after pulling |
 
 ---
 
@@ -248,7 +257,7 @@ If a post-upgrade cron pass behaves unexpectedly:
 
 ```bash
 # 1. Pause everything immediately
-# Edit ACTIVE-PROJECTS.md: all rows to paused
+nightclaw-admin pause [slug]   # for each active project
 
 # 2. Restore from backup
 cp -r ~/.openclaw/workspace-backup-YYYY-MM-DD/* ~/.openclaw/workspace/

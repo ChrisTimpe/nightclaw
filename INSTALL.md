@@ -163,6 +163,7 @@ listed in INTEGRITY-MANIFEST.md, and all cross-references resolve.
 - Every autonomous action is checked against a scope escalation test
 - Append-only audit trail from the first session
 - Approval chain linking {OWNER} authorization to agent action to audit entry
+- `nightclaw-admin` CLI for managing the system without spending tokens (approve, pause, guide, arm/disarm)
 - Emergency kill switch active from install
 
 Full deployment details: [`DEPLOY.md`](DEPLOY.md)

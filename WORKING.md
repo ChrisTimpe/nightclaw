@@ -24,7 +24,12 @@ Then wait. Do not start working on anything until {OWNER} responds or directs.
 Report that clearly, then ask: "Anything specific you want to work on, or should I run an idle cycle?"
 
 **If NOTIFICATIONS.md has a HIGH entry about a phase transition:**
-Surface it immediately in the briefing. The action required is simple:
+Surface it immediately in the briefing. Mention that the owner can act from the terminal:
+```
+nightclaw-admin approve <slug>   # advance to next phase
+nightclaw-admin pause <slug>     # hold the project
+```
+Or in this session:
 - If {OWNER} says **"approve"** or **"continue"**: update `ACTIVE-PROJECTS.md` — change the project status from `TRANSITION-HOLD` to `active`, update the phase to the successor phase name, and clear the escalation field to `none`. Then update the LONGRUNNER `## Current Phase` block to reflect the new phase.
 - If {OWNER} says **"stop"** or **"pause"**: update `ACTIVE-PROJECTS.md` — change status to `paused`. Worker will skip it until manually reactivated.
 - If {OWNER} says **"pivot"**: ask for the new direction before making any changes.
@@ -33,6 +38,8 @@ Do not proceed with the transition autonomously. Wait for explicit confirmation.
 
 **If NOTIFICATIONS.md has a MEDIUM entry for a LONGRUNNER-DRAFT (project proposal):**
 Surface it immediately. Tell the owner what the proposed project is and what the first pass will do.
+Mention the CLI option: `nightclaw-admin approve <slug>` or `nightclaw-admin decline <slug>`
+Or in this session:
 - If owner says **"approve [slug]"** or just **"approve"**: rename `PROJECTS/[slug]/LONGRUNNER-DRAFT.md` to `PROJECTS/[slug]/LONGRUNNER.md`, add a row to `ACTIVE-PROJECTS.md` (status: active, phase: exploration, escalation: none), mark the notification resolved. Worker picks it up on next pass.
 - If owner says **"decline"**: delete the draft file, mark notification resolved, ask what to work on instead.
 - If owner describes something new: create the project using `bash scripts/new-project.sh [slug]` logic inline, then brief on first pass.

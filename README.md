@@ -241,8 +241,8 @@ After install and cron setup, **you don't need to do anything.** On the first id
 
 1. Crons start running
 2. First idle cycle: worker reads Domain Anchor → drafts `PROJECTS/[slug]/LONGRUNNER-DRAFT.md` → surfaces MEDIUM notification
-3. You open a main session: agent briefs you on the draft and what the first pass will do
-4. You say **"approve"** — agent activates the project, worker picks it up on next pass
+3. You run `nightclaw-admin alerts` to see the draft, or open a main session for a briefing
+4. You run `nightclaw-admin approve <slug>` — project activates, worker picks it up on next pass
 5. Overnight: worker executes research passes, manager reviews, progress accumulates
 6. Morning: you read `NOTIFICATIONS.md` for a summary of what happened
 
@@ -310,7 +310,7 @@ Two crons run permanently. The **worker** fires every 3 hours on a cheap model (
 
 The **manager** fires once per day on an expensive model (Sonnet). It reviews accumulated worker passes, detects worker crash state, surfaces held escalations, runs quality and direction reviews, rebalances priorities, audits recent passes, and sets strategic direction when no projects are active. It is the human's proxy inside the system. Running it once daily is sufficient — the expensive model is reserved for judgment work, not routine checks.
 
-The **human touchpoint** is async. The agent surfaces proposals, blockers, and enhancement candidates to NOTIFICATIONS.md as it encounters them. The owner reviews at their own cadence — typically a morning check — approves or guides, and the next worker pass acts on those decisions. This is the designed interaction pattern, not an exception flow.
+The **human touchpoint** is async and token-free. The `nightclaw-admin` CLI lets you check status, approve drafts, pause projects, inject guidance, and arm overnight pre-approvals — all as deterministic shell commands that log to the same audit trail the crons use. No LLM session needed for routine management. The agent surfaces proposals, blockers, and enhancement candidates to NOTIFICATIONS.md as it encounters them. The owner reviews at their own cadence — typically a morning check via `nightclaw-admin status` and `nightclaw-admin alerts` — acts on them from the terminal, and the next worker pass picks up those decisions. A main agent session is only needed when you want the model to actually reason about something.
 
 ```
 ACTIVE-PROJECTS.md              ← what to work on (dispatch table)
@@ -395,6 +395,7 @@ scripts/validate.sh         Checks internal consistency (file references, regist
 scripts/resign.sh           Re-signs all protected files after manual edits (updates INTEGRITY-MANIFEST.md)
 scripts/upgrade.sh          Merges updated NightClaw files into an existing workspace without data loss
 scripts/new-project.sh      Scaffolds a new LONGRUNNER project directory from template
+scripts/nightclaw-admin.sh  Owner CLI — approve/decline/pause/guide/arm/status without tokens
 scripts/check-lock.py       Diagnostic — prints current LOCK.md state (manual use only; exec-blocked in cron)
 scripts/smoke-test.sh       First-run smoke test simulating a full new user setup in an isolated temp directory
 ```

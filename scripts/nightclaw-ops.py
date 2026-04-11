@@ -20,6 +20,11 @@ Commands:
   prune-candidates    T8.3: Identify NOTIFICATIONS entries eligible for pruning
   scr-verify          T8: R6 self-consistency rules (SCR-01 through SCR-08)
   dispatch-validate   Field contract validation (R2 enums, NOT EMPTY, FK)
+  longrunner-extract  T2: Extract machine-parseable fields from LONGRUNNER
+  idle-triage         T1.5: Determine first actionable idle cycle tier
+  strategic-context   T3.5-manager: Pre-digest strategic context for idle manager
+  t7-dedup            T7: Check if a signal is already documented in target file
+  crash-context       T0: Retrieve context from a crashed session for recovery
 
 All output is machine-parseable. LLM reads output and acts on it.
 LLM never does the computation itself.
@@ -233,40 +238,118 @@ def cmd_dispatch():
 
 def cmd_scan_notifications():
     """Scan NOTIFICATIONS.md for worker-actionable entries.
-    Output: FOUND:<index>:<priority>:<summary> or NONE
+    Uses structural matching: any notification entry that is not [DONE],
+    not LOW/INFO priority, and not a lock-defer or manager-deferred message
+    is considered actionable. Also matches explicit actionable tags.
+    Output: FOUND:line=<n>:<priority>:<summary> or NONE
     """
     content = read_file("NOTIFICATIONS.md")
     if content is None:
         print("NONE reason=file_not_found")
         return
 
+    # Explicit actionable tags (original set)
     actionable_tags = [
         "WORKER-ACTION-REQUIRED", "PENDING-LESSON",
         "AUDIT-FLAG", "SESSION-SUMMARY"
     ]
 
+    # Skip patterns — these are not actionable by the worker
+    skip_patterns = [
+        "[MANAGER DEFERRED]",
+        "Worker startup deferred",
+        "Manager startup deferred",
+        "holds lock",
+    ]
+
+    # Non-actionable priorities for structural matching
+    low_priorities = {"LOW", "INFO"}
+
     entries = []
+    in_alerts = False
+    in_code_block = False
+
     for i, line in enumerate(content.splitlines()):
         line_stripped = line.strip()
+        line_num = i + 1
+
+        # Track code blocks (skip template examples in Entry Formats section)
+        if line_stripped.startswith("```"):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+
+        # Track section — only scan "## Current Alerts" and below
+        if "## Current Alerts" in line or "## current alerts" in line.lower():
+            in_alerts = True
+            continue
+        # Also accept "## Append new entries" as start of entries area
+        if "append new entries" in line.lower():
+            in_alerts = True
+            continue
+        if not in_alerts:
+            continue
+
         # Skip done entries
-        if line_stripped.startswith("[DONE]"):
+        if line_stripped.startswith("[DONE"):
             continue
         # Skip headers, empty lines, HTML comments, and separators
         if not line_stripped or line_stripped.startswith("#") or line_stripped.startswith("---"):
             continue
         if line_stripped.startswith("<!--") or line_stripped.startswith("//"):
             continue
-        # Check for actionable tags
-        for tag in actionable_tags:
-            if tag in line_stripped.upper():
-                entries.append((i + 1, line_stripped[:120]))
-                break
+        # Skip lines with template placeholders
+        if "[YYYY-MM-DD" in line_stripped or "[slug]" in line_stripped:
+            continue
+        # Skip table header and separator rows
+        if line_stripped.startswith("| Priority") or line_stripped.startswith("| ---"):
+            continue
+        if all(c in "|- :" for c in line_stripped):
+            continue
+
+        # Skip known non-actionable patterns
+        if any(skip in line_stripped for skip in skip_patterns):
+            continue
+
+        # Extract priority if present
+        pri_m = re.search(r'Priority:\s*(INFO|LOW|MEDIUM|HIGH|CRITICAL)', line_stripped, re.IGNORECASE)
+        priority = pri_m.group(1).upper() if pri_m else None
+
+        # Method 1: Explicit actionable tags — always actionable regardless of priority
+        has_tag = any(tag in line_stripped.upper() for tag in actionable_tags)
+        if has_tag:
+            entries.append((line_num, priority or "TAGGED", line_stripped[:120]))
+            continue
+
+        # Method 2: Structural matching — any entry with action_needed= or
+        # MEDIUM/HIGH/CRITICAL priority is actionable
+        if priority and priority not in low_priorities:
+            entries.append((line_num, priority, line_stripped[:120]))
+            continue
+
+        # Method 3: Entries with explicit action_needed field
+        if "action_needed" in line_stripped.lower():
+            entries.append((line_num, priority or "ACTION", line_stripped[:120]))
+            continue
+
+        # Method 4: Entries that look like notification rows (have a timestamp
+        # and pipe-delimited structure with substantive content)
+        if "|" in line_stripped and re.search(r'\d{4}-\d{2}-\d{2}', line_stripped):
+            # Has a date and pipes — likely a notification entry
+            # Only skip if explicitly LOW/INFO
+            if priority in low_priorities:
+                continue
+            # No priority extracted = unknown, treat as potentially actionable
+            if priority is None:
+                entries.append((line_num, "UNKNOWN", line_stripped[:120]))
+                continue
 
     if not entries:
         print("NONE reason=no_actionable_entries")
     else:
-        for line_num, summary in entries:
-            print(f"FOUND:line={line_num}:{summary}")
+        for line_num, priority, summary in entries:
+            print(f"FOUND:line={line_num}:priority={priority}:{summary}")
         print(f"TOTAL:{len(entries)}")
 
 
@@ -728,7 +811,7 @@ def cmd_prune_candidates():
             continue
 
         # Check [DONE]
-        if line_stripped.startswith("[DONE]"):
+        if line_stripped.startswith("[DONE"):
             candidates.append((line_num, "done_marker", line_stripped[:80]))
             continue
 
@@ -1016,6 +1099,654 @@ def cmd_dispatch_validate():
 
 
 # ---------------------------------------------------------------------------
+# longrunner-extract: T2 — extract machine-parseable fields from LONGRUNNER
+# ---------------------------------------------------------------------------
+
+def cmd_longrunner_extract():
+    """Extract routing-critical fields from a LONGRUNNER without requiring full file read.
+    Usage: nightclaw-ops.py longrunner-extract <slug>
+    Output: key=value pairs, one per line. LLM reads these instead of the full file.
+    Only reads the full LONGRUNNER if T4 execution requires narrative context.
+    """
+    if len(sys.argv) < 3:
+        print("ERROR: usage: longrunner-extract <slug>", file=sys.stderr)
+        sys.exit(2)
+    slug = sys.argv[2]
+
+    # Try LONGRUNNER.md first, then LONGRUNNER-DRAFT.md
+    content = read_file(f"PROJECTS/{slug}/LONGRUNNER.md")
+    is_draft = False
+    if content is None:
+        content = read_file(f"PROJECTS/{slug}/LONGRUNNER-DRAFT.md")
+        is_draft = True
+    if content is None:
+        print(f"ERROR: No LONGRUNNER found for slug={slug}")
+        sys.exit(1)
+
+    # Parse YAML blocks and key fields
+    fields = {}
+    fields["slug"] = slug
+    fields["is_draft"] = str(is_draft).lower()
+
+    # Extract from phase: block
+    phase_patterns = {
+        "phase.name": r'name:\s*"?([^"\n]+?)"?\s*$',
+        "phase.status": r'status:\s*"?([^"\n]+?)"?\s*$',
+        "phase.objective": r'objective:\s*"?([^"\n]+?)"?\s*$',
+        "phase.stop_condition": r'stop_condition:\s*"?([^"\n]+?)"?\s*$',
+        "phase.successor": r'successor:\s*"?([^"\n]+?)"?\s*$',
+        "phase.started": r'started:\s*"?([^"\n]+?)"?\s*$',
+        "transition_triggered_at": r'transition_triggered_at:\s*(.+?)\s*$',
+        "transition_expires": r'transition_expires:\s*(.+?)\s*$',
+        "transition_reescalation_count": r'transition_reescalation_count:\s*(\d+)',
+    }
+
+    # Extract from next_pass: block
+    next_pass_patterns = {
+        "next_pass.objective": r'objective:\s*"?([^"\n]+?)"?\s*$',
+        "next_pass.model_tier": r'model_tier:\s*"?([^"\n]+?)"?\s*$',
+        "next_pass.pass_type": r'pass_type:\s*"?([^"\n]+?)"?\s*$',
+    }
+
+    # Extract from last_pass: block
+    last_pass_patterns = {
+        "last_pass.date": r'date:\s*"?([^"\n]+?)"?\s*$',
+        "last_pass.quality": r'quality:\s*"?([^"\n]+?)"?\s*$',
+        "last_pass.validation_passed": r'validation_passed:\s*(.+?)\s*$',
+    }
+
+    # Parse in sections to avoid cross-section field name collisions
+    lines = content.splitlines()
+    in_section = None
+    for line in lines:
+        stripped = line.strip()
+        # Track section headers
+        if stripped.startswith("## Current Phase"):
+            in_section = "phase"
+            continue
+        elif stripped.startswith("## Next Pass"):
+            in_section = "next_pass"
+            continue
+        elif stripped.startswith("## Last Pass"):
+            in_section = "last_pass"
+            continue
+        elif stripped.startswith("## "):
+            in_section = None
+            continue
+
+        if in_section == "phase":
+            for key, pattern in phase_patterns.items():
+                m = re.search(pattern, stripped, re.MULTILINE)
+                if m and key not in fields:
+                    val = m.group(1).strip().strip('"').strip()
+                    if val and val not in ("~", "null", "None", ""):
+                        fields[key] = val
+        elif in_section == "next_pass":
+            for key, pattern in next_pass_patterns.items():
+                m = re.search(pattern, stripped, re.MULTILINE)
+                if m and key not in fields:
+                    val = m.group(1).strip().strip('"').strip()
+                    if val and val not in ("~", "null", "None", ""):
+                        fields[key] = val
+        elif in_section == "last_pass":
+            for key, pattern in last_pass_patterns.items():
+                m = re.search(pattern, stripped, re.MULTILINE)
+                if m and key not in fields:
+                    val = m.group(1).strip().strip('"').strip()
+                    if val and val not in ("~", "null", "None", ""):
+                        fields[key] = val
+
+    # Extract tools_required (array field)
+    tools_m = re.search(r'tools_required:\s*\[([^\]]+)\]', content)
+    if tools_m:
+        fields["next_pass.tools_required"] = tools_m.group(1).strip()
+
+    # Extract context_budget from next_pass — check for field existence
+    budget_m = re.search(r'context_budget:\s*"?([^"\n]+?)"?\s*$', content, re.MULTILINE)
+    if budget_m:
+        fields["next_pass.context_budget"] = budget_m.group(1).strip().strip('"')
+    else:
+        fields["next_pass.context_budget"] = "80K"  # default per spec
+
+    # Extract blockers (check if any non-empty rows exist)
+    blocker_section = False
+    has_blockers = False
+    for line in lines:
+        if "## Blockers" in line:
+            blocker_section = True
+            continue
+        if blocker_section:
+            if line.strip().startswith("## "):
+                break
+            if line.strip().startswith("|") and not line.strip().startswith("| Blocker") \
+               and not all(c in "|- :" for c in line.strip()):
+                cells = [c.strip() for c in line.split("|")[1:-1]]
+                if cells and cells[0] and cells[0] != "":
+                    has_blockers = True
+                    break
+    fields["has_blockers"] = str(has_blockers).lower()
+
+    # Determine routing decision
+    status = fields.get("phase.status", "unknown").lower()
+    objective = fields.get("next_pass.objective", "")
+
+    if status == "complete":
+        fields["routing"] = "COMPLETE"
+    elif status == "blocked":
+        fields["routing"] = "BLOCKED"
+    elif not objective:
+        fields["routing"] = "STALE_OBJECTIVE"
+    elif status == "active":
+        fields["routing"] = "ACTIVE"
+    else:
+        fields["routing"] = f"UNKNOWN_STATUS:{status}"
+
+    # Output all fields
+    for key, val in fields.items():
+        print(f"{key}={val}")
+
+
+# ---------------------------------------------------------------------------
+# idle-triage: T1.5 — determine first actionable idle cycle tier
+# ---------------------------------------------------------------------------
+
+def cmd_idle_triage():
+    """Check idle cycle tier prerequisites deterministically.
+    Returns the first tier with actionable work, so the LLM
+    skips reading OPS-IDLE-CYCLE.md tiers it won't reach.
+    Output: IDLE:TIER=<tier>:ACTION=<action> or IDLE:NONE
+    """
+    # Tier 1 prereq: [knowledge-repo] directory exists
+    # Check USER.md for knowledge-repo path, or look for common paths
+    user_content = read_file("USER.md")
+    knowledge_repo = None
+    if user_content:
+        m = re.search(r'knowledge.repo.*?:\s*(.+)', user_content, re.IGNORECASE)
+        if m:
+            repo_path = m.group(1).strip().strip('"').strip("'")
+            if repo_path and repo_path not in ("~", "null", "None", "", "—"):
+                knowledge_repo = repo_path
+
+    tier1_available = False
+    if knowledge_repo:
+        kr_path = ROOT / knowledge_repo.lstrip("/")
+        if kr_path.exists() and kr_path.is_dir():
+            tier1_available = True
+
+            # 1a: Check inbox
+            inbox_path = kr_path / "00-inbox"
+            if inbox_path.exists() and any(inbox_path.iterdir()):
+                print(f"IDLE:TIER=1a:ACTION=inbox_scan:path={inbox_path}")
+                return
+
+            # 1b: Check staleness log
+            stale_log = kr_path / "07-index" / "staleness-log.md"
+            if stale_log.exists():
+                stale_content = stale_log.read_text(encoding="utf-8", errors="replace")
+                if ">90" in stale_content or "stale" in stale_content.lower():
+                    print(f"IDLE:TIER=1b:ACTION=staleness_check:path={stale_log}")
+                    return
+
+            # 1c: Demand signal scan is always available if knowledge-repo configured
+            print("IDLE:TIER=1c:ACTION=demand_signal_scan")
+            return
+
+    # Tier 2a: knowledge-repo freshness (skip if no repo)
+    if knowledge_repo and tier1_available:
+        index_path = ROOT / knowledge_repo.lstrip("/") / "07-index" / "index.md"
+        if index_path.exists():
+            print("IDLE:TIER=2a:ACTION=source_freshness_check")
+            return
+
+    # Tier 2b: OPS-FAILURE-MODES open entries
+    fm_content = read_file("orchestration-os/OPS-FAILURE-MODES.md")
+    if fm_content:
+        # Count entries with Status: OPEN (or no RESOLVED/MITIGATED marker)
+        open_entries = []
+        in_entry = False
+        current_fm = None
+        for line in fm_content.splitlines():
+            m = re.match(r'^### (FM-\d+)', line)
+            if m:
+                in_entry = True
+                current_fm = m.group(1)
+                continue
+            if in_entry and "**Status:**" in line:
+                status_text = line.split("**Status:**")[1].strip().upper()
+                if "OPEN" in status_text:
+                    open_entries.append(current_fm)
+                in_entry = False
+        if open_entries:
+            print(f"IDLE:TIER=2b:ACTION=ops_failure_review:entries={','.join(open_entries)}")
+            return
+
+    # Tier 2c: TOOL-STATUS vs OPS-TOOL-REGISTRY sync
+    tool_status = read_file("orchestration-os/TOOL-STATUS.md")
+    tool_registry = read_file("orchestration-os/OPS-TOOL-REGISTRY.md")
+    if tool_status and tool_registry:
+        # Count registry entries vs status entries — quick heuristic for desync
+        reg_entries = len(re.findall(r'^\|\s*\d{4}-', tool_registry, re.MULTILINE))
+        stat_entries = len(re.findall(r'^\|\s*\w+', tool_status, re.MULTILINE))
+        # If registry has grown significantly beyond status table, needs sync
+        if reg_entries > stat_entries + 2:
+            print(f"IDLE:TIER=2c:ACTION=tool_status_sync:registry_entries={reg_entries}:status_entries={stat_entries}")
+            return
+
+    # Tier 3a: Memory dream pass trigger (5+ dated memory files)
+    memory_dir = ROOT / "memory"
+    if memory_dir.exists():
+        dated_files = list(memory_dir.glob("????-??-??.md"))
+        if len(dated_files) >= 5:
+            print(f"IDLE:TIER=3a:ACTION=memory_dream_pass:files={len(dated_files)}")
+            return
+
+    # Tier 3b: AGENTS lesson encoding
+    lessons = read_file("AGENTS-LESSONS.md")
+    memory_files = sorted(memory_dir.glob("????-??-??.md"), reverse=True) if memory_dir.exists() else []
+    if memory_files:
+        recent_3 = memory_files[:3]
+        has_unencoded = False
+        for mf in recent_3:
+            content = mf.read_text(encoding="utf-8", errors="replace")
+            # Check for lesson-like patterns not yet in AGENTS-LESSONS
+            if "lesson" in content.lower() or "correction" in content.lower() or "T7" in content:
+                has_unencoded = True
+                break
+        if has_unencoded:
+            print(f"IDLE:TIER=3b:ACTION=agents_lesson_encoding:recent_memory={len(recent_3)}")
+            return
+
+    # Tier 3c: MANAGER-REVIEW-REGISTRY housekeeping
+    mrr = read_file("PROJECTS/MANAGER-REVIEW-REGISTRY.md")
+    if mrr:
+        # Check for stale rows (projects marked complete/abandoned > 30 days)
+        now = now_utc()
+        for line in mrr.splitlines():
+            if "|" not in line:
+                continue
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if len(cells) >= 2:
+                dt = parse_iso(cells[0])
+                if dt and (now - dt).days > 30:
+                    print(f"IDLE:TIER=3c:ACTION=mrr_housekeeping")
+                    return
+
+    # Tier 4: New project identification
+    # Check prerequisites: no existing LONGRUNNER-DRAFT anywhere
+    drafts = list((ROOT / "PROJECTS").rglob("LONGRUNNER-DRAFT.md"))
+    if drafts:
+        print(f"IDLE:TIER=4:ACTION=draft_exists:slug={drafts[0].parent.name}:no_new_proposal_needed")
+        return
+
+    # Check conditions A, B, C for Tier 4
+    ap_content = read_file("ACTIVE-PROJECTS.md")
+    has_active = False
+    has_recent_complete = False
+    has_transition_hold = False
+
+    if ap_content:
+        header_found = False
+        headers = []
+        for line in ap_content.splitlines():
+            line = line.strip()
+            if not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if not header_found:
+                headers = [c.lower().replace(" ", "_") for c in cells]
+                header_found = True
+                continue
+            if cells and all(set(c.strip()) <= {"-", ":"} for c in cells):
+                continue
+            if len(cells) >= len(headers):
+                row = dict(zip(headers, cells))
+            else:
+                continue
+            status = row.get("status", "").strip().upper()
+            if status == "ACTIVE":
+                has_active = True
+            if status == "COMPLETE":
+                has_recent_complete = True  # Simplified; full check would parse dates
+            if status == "TRANSITION-HOLD":
+                has_transition_hold = True
+
+    condition_a = not has_active
+    condition_b = has_recent_complete
+    condition_c = has_transition_hold
+
+    if condition_a or condition_b or condition_c:
+        reasons = []
+        if condition_a:
+            reasons.append("no_active_projects")
+        if condition_b:
+            reasons.append("recent_completion")
+        if condition_c:
+            reasons.append("transition_hold_exists")
+        kr_note = "path_b_no_knowledge_repo" if not tier1_available else "path_a_knowledge_repo"
+        print(f"IDLE:TIER=4a:ACTION=project_proposal:{kr_note}:reasons={','.join(reasons)}")
+        return
+
+    print("IDLE:NONE:all_tiers_checked")
+
+
+# ---------------------------------------------------------------------------
+# strategic-context: Manager T3.5 — pre-digest strategic context
+# ---------------------------------------------------------------------------
+
+def cmd_strategic_context():
+    """Pre-digest strategic context for the manager's idle-state T3.5 pass.
+    Checks for drafts, recent completions, memory entry count, and domain anchor age.
+    Output reduces what the manager LLM needs to read on the expensive Sonnet model.
+    """
+    results = {}
+
+    # Check for pending LONGRUNNER-DRAFT files
+    drafts = []
+    projects_dir = ROOT / "PROJECTS"
+    if projects_dir.exists():
+        for draft in projects_dir.rglob("LONGRUNNER-DRAFT.md"):
+            slug = draft.parent.name
+            if slug != "PROJECTS":
+                drafts.append(slug)
+    if drafts:
+        print(f"DRAFTS:{','.join(drafts)}")
+    else:
+        print("DRAFTS:none")
+
+    # Check for recent completions in ACTIVE-PROJECTS
+    ap_content = read_file("ACTIVE-PROJECTS.md")
+    completions = []
+    if ap_content:
+        header_found = False
+        headers = []
+        for line in ap_content.splitlines():
+            line = line.strip()
+            if not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if not header_found:
+                headers = [c.lower().replace(" ", "_") for c in cells]
+                header_found = True
+                continue
+            if cells and all(set(c.strip()) <= {"-", ":"} for c in cells):
+                continue
+            if len(cells) >= len(headers):
+                row = dict(zip(headers, cells))
+            else:
+                continue
+            status = row.get("status", "").strip().upper()
+            slug = row.get("project_slug", row.get("slug", "")).strip()
+            if status == "COMPLETE" and slug:
+                completions.append(slug)
+    if completions:
+        print(f"RECENT_COMPLETIONS:{','.join(completions)}")
+    else:
+        print("RECENT_COMPLETIONS:none")
+
+    # Count and list recent memory entries
+    memory_dir = ROOT / "memory"
+    memory_entries = []
+    if memory_dir.exists():
+        memory_entries = sorted(memory_dir.glob("????-??-??.md"), reverse=True)
+    entry_names = [f.stem for f in memory_entries[:5]]
+    print(f"MEMORY_ENTRIES:{len(memory_entries)}:{','.join(entry_names) if entry_names else 'none'}")
+
+    # Check domain anchor freshness (when was SOUL.md last modified?)
+    soul_path = ROOT / "SOUL.md"
+    if soul_path.exists():
+        mtime = datetime.fromtimestamp(soul_path.stat().st_mtime, tz=timezone.utc)
+        age_days = (now_utc() - mtime).days
+        print(f"DOMAIN_ANCHOR_AGE:{age_days}d")
+    else:
+        print("DOMAIN_ANCHOR_AGE:unknown")
+
+    # Check MANAGER-REVIEW-REGISTRY for last review date
+    mrr = read_file("PROJECTS/MANAGER-REVIEW-REGISTRY.md")
+    last_review = "never"
+    if mrr:
+        dates = re.findall(r'(\d{4}-\d{2}-\d{2})', mrr)
+        if dates:
+            last_review = sorted(dates)[-1]
+    print(f"LAST_MANAGER_REVIEW:{last_review}")
+
+    # Determine recommended T3.5 action
+    if drafts:
+        print(f"RECOMMENDED:T3.5-A:review_draft:{drafts[0]}")
+    elif completions:
+        print(f"RECOMMENDED:T3.5-B:review_completion:{completions[0]}")
+    else:
+        soul_age = 999
+        if soul_path.exists():
+            mtime = datetime.fromtimestamp(soul_path.stat().st_mtime, tz=timezone.utc)
+            soul_age = (now_utc() - mtime).days
+        if soul_age > 30:
+            print("RECOMMENDED:T3.5-C:domain_anchor_review")
+        else:
+            print("RECOMMENDED:T3.5-D:no_action")
+
+
+# ---------------------------------------------------------------------------
+# t7-dedup: T7 — check if a signal is already documented
+# ---------------------------------------------------------------------------
+
+def cmd_t7_dedup():
+    """Check if a T7 signal is already documented in the target file.
+    Usage: nightclaw-ops.py t7-dedup <target-file> <signal-text>
+    Performs fuzzy substring matching against existing entries.
+    Output: DUPLICATE:<entry_id>:<match_preview> or NOVEL
+    """
+    if len(sys.argv) < 4:
+        print("ERROR: usage: t7-dedup <target-file> <signal-text>", file=sys.stderr)
+        sys.exit(2)
+
+    target_file = sys.argv[2]
+    signal_text = " ".join(sys.argv[3:])  # Allow multi-word signal text
+
+    content = read_file(target_file)
+    if content is None:
+        # File doesn't exist yet — signal is novel by definition
+        print(f"NOVEL reason=target_file_not_found:{target_file}")
+        return
+
+    # Normalize signal for matching
+    signal_lower = signal_text.lower().strip()
+    signal_words = set(re.findall(r'\b\w{4,}\b', signal_lower))  # words 4+ chars
+
+    if not signal_words:
+        print("NOVEL reason=signal_too_short_for_matching")
+        return
+
+    # Scan the file for matching entries
+    best_match = None
+    best_score = 0
+    best_preview = ""
+    best_id = "unknown"
+
+    lines = content.splitlines()
+    current_entry_id = None
+    current_entry_text = []
+
+    for line in lines:
+        # Detect entry boundaries
+        # OPS-FAILURE-MODES: ### FM-NNN
+        fm_m = re.match(r'^### (FM-\d+)', line)
+        if fm_m:
+            # Score previous entry if it exists
+            if current_entry_id and current_entry_text:
+                entry_text = " ".join(current_entry_text).lower()
+                entry_words = set(re.findall(r'\b\w{4,}\b', entry_text))
+                if signal_words and entry_words:
+                    overlap = len(signal_words & entry_words)
+                    score = overlap / len(signal_words)
+                    if score > best_score:
+                        best_score = score
+                        best_match = current_entry_id
+                        best_preview = entry_text[:120]
+            current_entry_id = fm_m.group(1)
+            current_entry_text = []
+            continue
+
+        # AGENTS-LESSONS: date-prefixed lines
+        lesson_m = re.match(r'^(\d{4}-\d{2}-\d{2}):', line)
+        if lesson_m:
+            # Score previous entry
+            if current_entry_id and current_entry_text:
+                entry_text = " ".join(current_entry_text).lower()
+                entry_words = set(re.findall(r'\b\w{4,}\b', entry_text))
+                if signal_words and entry_words:
+                    overlap = len(signal_words & entry_words)
+                    score = overlap / len(signal_words)
+                    if score > best_score:
+                        best_score = score
+                        best_match = current_entry_id
+                        best_preview = entry_text[:120]
+            current_entry_id = f"lesson-{lesson_m.group(1)}"
+            current_entry_text = [line]
+            continue
+
+        # OPS-TOOL-REGISTRY: table rows with dates
+        tool_m = re.match(r'^\|\s*(\d{4}-\d{2}-\d{2})\s*\|', line)
+        if tool_m:
+            if current_entry_id and current_entry_text:
+                entry_text = " ".join(current_entry_text).lower()
+                entry_words = set(re.findall(r'\b\w{4,}\b', entry_text))
+                if signal_words and entry_words:
+                    overlap = len(signal_words & entry_words)
+                    score = overlap / len(signal_words)
+                    if score > best_score:
+                        best_score = score
+                        best_match = current_entry_id
+                        best_preview = entry_text[:120]
+            current_entry_id = f"tool-{tool_m.group(1)}"
+            current_entry_text = [line]
+            continue
+
+        # Accumulate text for current entry
+        if current_entry_id:
+            current_entry_text.append(line)
+
+    # Score the last entry
+    if current_entry_id and current_entry_text:
+        entry_text = " ".join(current_entry_text).lower()
+        entry_words = set(re.findall(r'\b\w{4,}\b', entry_text))
+        if signal_words and entry_words:
+            overlap = len(signal_words & entry_words)
+            score = overlap / len(signal_words)
+            if score > best_score:
+                best_score = score
+                best_match = current_entry_id
+                best_preview = entry_text[:120]
+
+    # Threshold: 50% word overlap = duplicate
+    if best_score >= 0.5 and best_match:
+        print(f"DUPLICATE:{best_match}:score={best_score:.2f}:{best_preview}")
+    else:
+        if best_match:
+            print(f"NOVEL closest={best_match}:score={best_score:.2f}")
+        else:
+            print("NOVEL reason=no_entries_in_file")
+
+
+# ---------------------------------------------------------------------------
+# crash-context: T0 — retrieve context from a crashed session
+# ---------------------------------------------------------------------------
+
+def cmd_crash_context():
+    """Retrieve context from a crashed session for recovery.
+    Usage: nightclaw-ops.py crash-context <run_id>
+    Returns the project, objective, and last known state of a crashed session.
+    Helps the next pass avoid repeating the same crash-inducing objective.
+    """
+    if len(sys.argv) < 3:
+        print("ERROR: usage: crash-context <run_id>", file=sys.stderr)
+        sys.exit(2)
+
+    target_run = sys.argv[2]
+
+    audit_log = read_file("audit/AUDIT-LOG.md")
+    if audit_log is None:
+        print(f"ERROR: audit/AUDIT-LOG.md not found")
+        sys.exit(1)
+
+    # Collect all entries for the target run
+    run_entries = []
+    project_slug = "unknown"
+    last_objective = "unknown"
+    last_step = "unknown"
+    last_type = "unknown"
+    last_result = "unknown"
+
+    for line in audit_log.splitlines():
+        if target_run not in line:
+            continue
+        run_entries.append(line.strip())
+
+        # Extract project slug
+        slug_m = re.search(r'PROJECT:(\S+)', line)
+        if slug_m:
+            project_slug = slug_m.group(1).rstrip("|")
+
+        # Extract objective
+        obj_m = re.search(r'OBJECTIVE:(.+?)(?:\||$)', line)
+        if obj_m:
+            last_objective = obj_m.group(1).strip()
+
+        # Extract step info
+        step_m = re.search(rf'TASK:{re.escape(target_run)}\.(T\S+)', line)
+        if step_m:
+            last_step = step_m.group(1)
+
+        # Extract type and result
+        type_m = re.search(r'TYPE:(\S+)', line)
+        if type_m:
+            last_type = type_m.group(1)
+        result_m = re.search(r'RESULT:(\S+)', line)
+        if result_m:
+            last_result = result_m.group(1)
+
+    if not run_entries:
+        print(f"NOT_FOUND:{target_run}")
+        sys.exit(1)
+
+    print(f"RUN_ID:{target_run}")
+    print(f"PROJECT:{project_slug}")
+    print(f"LAST_OBJECTIVE:{last_objective}")
+    print(f"LAST_STEP:{last_step}")
+    print(f"LAST_TYPE:{last_type}")
+    print(f"LAST_RESULT:{last_result}")
+    print(f"TOTAL_ENTRIES:{len(run_entries)}")
+
+    # Check if the same project+objective combination has crashed before
+    crash_count = 0
+    for line in audit_log.splitlines():
+        if "LOCK_STALE" in line and project_slug in line:
+            crash_count += 1
+    if crash_count > 1:
+        print(f"REPEAT_CRASH:project={project_slug}:prior_crashes={crash_count}")
+        print("RECOMMENDATION:ESCALATE — same project has crashed multiple times")
+    elif crash_count == 1:
+        print(f"FIRST_CRASH:project={project_slug}")
+        print("RECOMMENDATION:RETRY_WITH_MODIFIED_OBJECTIVE")
+    else:
+        print(f"NO_PRIOR_CRASHES:project={project_slug}")
+        print("RECOMMENDATION:RETRY")
+
+    # Check memory for crash context
+    memory_dir = ROOT / "memory"
+    if memory_dir.exists():
+        # Check most recent memory file for notes about this run
+        recent_memory = sorted(memory_dir.glob("????-??-??.md"), reverse=True)
+        for mf in recent_memory[:3]:
+            mcontent = mf.read_text(encoding="utf-8", errors="replace")
+            if target_run in mcontent:
+                # Extract the relevant line(s)
+                for mline in mcontent.splitlines():
+                    if target_run in mline:
+                        print(f"MEMORY_NOTE:{mf.name}:{mline.strip()[:200]}")
+                break
+
+
+# ---------------------------------------------------------------------------
 # Main dispatcher
 # ---------------------------------------------------------------------------
 
@@ -1033,6 +1764,11 @@ COMMANDS = {
     "prune-candidates": cmd_prune_candidates,
     "scr-verify": cmd_scr_verify,
     "dispatch-validate": cmd_dispatch_validate,
+    "longrunner-extract": cmd_longrunner_extract,
+    "idle-triage": cmd_idle_triage,
+    "strategic-context": cmd_strategic_context,
+    "t7-dedup": cmd_t7_dedup,
+    "crash-context": cmd_crash_context,
 }
 
 def main():

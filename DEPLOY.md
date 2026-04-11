@@ -319,11 +319,40 @@ openclaw models auth add
 
 ## Day-to-Day Operation
 
-- **Check status:** Ask "what's active?" or read ACTIVE-PROJECTS.md
+**The `nightclaw-admin` CLI handles all routine management without spending tokens:**
+
+```bash
+# Morning check
+bash scripts/nightclaw-admin.sh status       # what's active, what phase, next objective
+bash scripts/nightclaw-admin.sh alerts        # unresolved notifications
+
+# Act on cron results
+bash scripts/nightclaw-admin.sh approve <slug>          # approve a pending project draft
+bash scripts/nightclaw-admin.sh decline <slug> [reason]  # decline and delete a draft
+bash scripts/nightclaw-admin.sh done <line-number>       # resolve a notification
+bash scripts/nightclaw-admin.sh guide <message>          # inject guidance for next worker pass
+
+# Manage projects
+bash scripts/nightclaw-admin.sh pause <slug>             # pause a project
+bash scripts/nightclaw-admin.sh unpause <slug>           # resume a paused project
+bash scripts/nightclaw-admin.sh priority <slug> <n>      # change priority
+
+# Overnight control
+bash scripts/nightclaw-admin.sh arm PA-001 2026-04-11    # activate pre-approval (auto re-signs)
+bash scripts/nightclaw-admin.sh disarm PA-001            # deactivate (auto re-signs)
+
+# Audit
+bash scripts/nightclaw-admin.sh log [n]                  # last n audit entries
+```
+
+All admin commands log to `audit/AUDIT-LOG.md` and `audit/CHANGE-LOG.md` in the same format the cron sessions use. The audit trail is complete regardless of whether a human or a cron made the change.
+
+**You can also use a main agent session** for anything that requires reasoning — but routine approvals, pauses, and priority changes are mechanical file operations that the admin CLI handles at zero token cost.
+
+**Additional operations:**
 - **Add a project:** `bash scripts/new-project.sh <slug>` — scaffolds everything in one command
-- **Shift focus:** Edit priority column in ACTIVE-PROJECTS.md
-- **See what needs attention:** Read NOTIFICATIONS.md each morning
-- **Approve a phase transition:** Tell the agent "approve", "pause", or "pivot" when it surfaces a HIGH notification
+- **Shift focus:** `bash scripts/nightclaw-admin.sh priority <slug> <n>` or edit ACTIVE-PROJECTS.md directly
+- **Approve a phase transition:** `bash scripts/nightclaw-admin.sh approve <slug>` or tell the agent in a main session
 - **Re-sign after editing a protected file:** `bash scripts/resign.sh <file>` — updates the manifest automatically
 - **Emergency stop:** Set all ACTIVE-PROJECTS.md rows to `paused`
 
