@@ -13,7 +13,7 @@
 # Deterministic operations: scripts/nightclaw-ops.py replaces LLM reasoning with code
 # for all structured checks (integrity, dispatch, crash detection, pruning, SCR rules,
 # LONGRUNNER field extraction, idle cycle triage, strategic context pre-digestion,
-# T7 dedup matching, and crash recovery context).
+# T7 dedup matching, crash recovery context, and safe file appends).
 # Prompts call the script and act on its machine-parseable output. The LLM never does
 # computation that code can do — hashing, date math, set comparison, table parsing, grep,
 # YAML field extraction, file existence checks, or fuzzy text matching.

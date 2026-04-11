@@ -1,5 +1,5 @@
 # CRON-MANAGER-PROMPT.md — NightClaw Manager
-# v0.1.0 | Govern. Verify. Direct. Do not execute project tasks.
+# v0.2.1 | Govern. Verify. Direct. Do not execute project tasks.
 # Requires: --session "session:nightclaw-manager" --light-context --no-deliver
 
 ---
@@ -17,19 +17,19 @@ STARTUP — execute in this exact order before T0
      IF output starts with DEFER:
        Parse holder, run_id, expires from the output.
        Output: "[LOCK] Active lock detected. Holder: [holder]. Expires: [expires]. Deferring."
-       Append to audit/AUDIT-LOG.md: TASK:[tentative-run_id].STARTUP | TYPE:LOCK_CHECK | RESULT:BLOCKED_BY:[run_id] | HOLDER:[holder]
-       Append LOW to NOTIFICATIONS.md: "Manager startup deferred — [holder] holds lock (expires [expires])."
+       Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[tentative-run_id].STARTUP | TYPE:LOCK_CHECK | RESULT:BLOCKED_BY:[run_id] | HOLDER:[holder]
+       Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: LOW | Project: system | Status: MANAGER-DEFERRED \nManager startup deferred — [holder] holds lock (expires [expires]).
        EXIT cleanly. Do NOT proceed to step 1 or T0.
 
      IF output starts with PROCEED:
        IF output contains STALE_HOLDER: prior session crashed before T9.
          Parse STALE_HOLDER, STALE_RUN, FAILURES from the output.
          Set consecutive_pass_failures = FAILURES + 1.
-         Append to audit/AUDIT-LOG.md: TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n]
-         IF consecutive_pass_failures >= 3: append MEDIUM to NOTIFICATIONS.md:
-           "session:nightclaw-manager has failed [n] consecutive passes. Check logs for crash pattern."
-         IF consecutive_pass_failures >= 5: append HIGH to NOTIFICATIONS.md:
-           "session:nightclaw-manager has failed [n] consecutive passes. Human review needed."
+         Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].STARTUP | TYPE:LOCK_STALE | CLEARED_BY:[run_id] | STALE_HOLDER:[holder] | FAILURES:[n]
+         IF consecutive_pass_failures >= 3:
+           Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: system | Status: CONSECUTIVE-FAILURES \nsession:nightclaw-manager has failed [n] consecutive passes. Check logs for crash pattern.
+         IF consecutive_pass_failures >= 5:
+           Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: HIGH | Project: system | Status: CONSECUTIVE-FAILURES \nsession:nightclaw-manager has failed [n] consecutive passes. Human review needed.
        OVERWRITE LOCK.md:
          status: locked
          holder: session:nightclaw-manager
@@ -59,17 +59,17 @@ T0  SEQUENCING GATE + CRASH DETECTION
     CRASH → BUNDLE:surface_escalation(priority=CRITICAL, worker-crash:[run_id])
            Set escalation_pending=worker-crash-[run_id] on the crashed project's row ONLY.
            Other active projects remain unaffected. Continue manager pass — do not halt.
-    ROUTING_HALT → Surface as MEDIUM to NOTIFICATIONS.md. Continue.
+    ROUTING_HALT → Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: system | Status: ROUTING-HALT \n[details from script output]. Continue.
     CLEAN → continue.
 
   TIMING CHECKS:
     Execute: python3 scripts/nightclaw-ops.py timing-check
     Output: CONTINUE, DEFER:worker_in_progress, or DEFER:worker_too_recent.
     DEFER:worker_in_progress →
-      Append LOW to NOTIFICATIONS.md: "[MANAGER DEFERRED] Worker in progress."
+      Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: LOW | Project: system | Status: MANAGER-DEFERRED \n[MANAGER DEFERRED] Worker in progress.
       EXIT cleanly (release lock at T9 first).
     DEFER:worker_too_recent →
-      Append LOW to NOTIFICATIONS.md: "[MANAGER DEFERRED] Worker completed <5min ago."
+      Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: LOW | Project: system | Status: MANAGER-DEFERRED \n[MANAGER DEFERRED] Worker completed <5min ago.
       EXIT cleanly (release lock at T9 first).
     CONTINUE → proceed.
 
@@ -80,7 +80,7 @@ T1  INTEGRITY VERIFICATION
   The script output is authoritative. Do not recompute hashes yourself.
   RESULT:FAIL → BUNDLE:integrity_fail. Surface. Continue (do not halt manager).
   RESULT:PASS → BUNDLE:manifest_verify.
-  TASK:[run_id].T1 | TYPE:INTEGRITY_CHECK | RESULT:[PASS|FAIL] | FILES:[count from script output]
+  Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T1 | TYPE:INTEGRITY_CHECK | RESULT:[PASS|FAIL] | FILES:[count from script output]
 
 ─────────────────────────────────────────────
 T2  SURFACE ESCALATIONS
@@ -96,15 +96,12 @@ T2  SURFACE ESCALATIONS
   Output: EXPIRED:<slug>:reescalation_count=<n> with ACTION:REESCALATE or ACTION:AUTO_PAUSE.
   For each EXPIRED result:
     ACTION:REESCALATE →
-      Append CRITICAL to NOTIFICATIONS.md:
-        action_needed="TRANSITION-HOLD expired: [slug]. Re-escalation [count+1] of 3.
-        Default after 3rd: project auto-pauses."
+      Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: CRITICAL | Project: [slug] | Status: TRANSITION-HOLD-EXPIRED \nTRANSITION-HOLD expired: [slug]. Re-escalation [count+1] of 3. Default after 3rd: project auto-pauses.
       Increment LONGRUNNER transition_reescalation_count by 1.
       Update ACTIVE-PROJECTS.md escalation_pending=transition-stale-re[count+1]-[YYYY-MM-DD].
     ACTION:AUTO_PAUSE →
       Set ACTIVE-PROJECTS.md status=PAUSED, escalation_pending=transition-auto-paused-[YYYY-MM-DD].
-      Append CRITICAL to NOTIFICATIONS.md:
-        action_needed="[slug] auto-paused: 3 unanswered TRANSITION-HOLD escalations."
+      Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: CRITICAL | Project: [slug] | Status: AUTO-PAUSED \n[slug] auto-paused: 3 unanswered TRANSITION-HOLD escalations.
   ALL_CURRENT → no action needed.
 
 ─────────────────────────────────────────────
@@ -115,7 +112,7 @@ T3  CHANGE DETECTION
 
   NO_ACTIVE_PROJECTS → go to T3.5 (STRATEGIC DIRECTION).
   NEW_ACTIVITY:<slug> → T4 (review those projects).
-  NO_CHANGES → APPEND one-liner to memory/YYYY-MM-DD.md (inline): "No new worker activity." Go to T8.
+  NO_CHANGES → Execute: python3 scripts/nightclaw-ops.py append memory/YYYY-MM-DD.md [Manager RUN-ID] No new worker activity. Go to T8.
 
 ─────────────────────────────────────────────
 T3.5  STRATEGIC DIRECTION (idle state only)
@@ -134,25 +131,16 @@ T3.5  STRATEGIC DIRECTION (idle state only)
      Execute: python3 scripts/nightclaw-ops.py longrunner-extract <slug>
      Read extracted fields. Only READ SOUL.md Domain Anchor if evaluating alignment.
      IF strong draft:
-       APPEND to NOTIFICATIONS.md (standalone, not via bundle) as HIGH:
-         "Manager recommends approving [slug]. Aligned with domain anchor.
-         Stop condition is testable. Ready for worker execution.
-         To approve: rename LONGRUNNER-DRAFT.md → LONGRUNNER.md, add row
-         to ACTIVE-PROJECTS.md, worker picks up on next pass."
+       Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: HIGH | Project: [slug] | Status: PENDING-REVIEW \nManager recommends approving [slug]. Aligned with domain anchor. Stop condition is testable. Ready for worker execution. To approve: rename LONGRUNNER-DRAFT.md → LONGRUNNER.md, add row to ACTIVE-PROJECTS.md, worker picks up on next pass.
      IF weak draft:
-       APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
-         "Manager reviewed [slug] draft. Issues: [list]. Recommend revisions
-         before approval. Worker will revise on next idle cycle if directed."
+       Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: [slug] | Status: DRAFT-REVIEW \nManager reviewed [slug] draft. Issues: [list]. Recommend revisions before approval. Worker will revise on next idle cycle if directed.
      Go to T8.
 
   RECOMMENDED:T3.5-B → review the named completed project.
      READ its LONGRUNNER.md — review outcomes, phases completed, lessons.
      READ the most recent 2 memory/ entries (not all 5 — use strategic-context
      MEMORY_ENTRIES count to decide if more are needed).
-     APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
-       "[slug] completed. Key outcomes: [summary]. Suggested follow-on
-       directions: [2-3 concrete next project ideas derived from findings].
-       Worker will propose a draft if no direction given within 48 hours."
+     Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: [slug] | Status: PROJECT-COMPLETE \n[slug] completed. Key outcomes: [summary]. Suggested follow-on directions: [2-3 concrete next project ideas derived from findings]. Worker will propose a draft if no direction given within 48 hours.
      Go to T8.
 
   RECOMMENDED:T3.5-C → domain anchor review.
@@ -160,21 +148,14 @@ T3.5  STRATEGIC DIRECTION (idle state only)
      READ USER.md for any updated constraints or interests.
      READ the last 3 memory/ entries for patterns.
      IF the domain anchor is stale, too broad, or misaligned with recent work:
-       APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
-         "Manager recommendation: Domain Anchor in SOUL.md may benefit from
-         refinement. Current: [quote]. Observation: [what's changed]. Suggested
-         update: [concrete revision]. This shapes all future project proposals."
+       Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: system | Status: DOMAIN-ANCHOR-REVIEW \nManager recommendation: Domain Anchor in SOUL.md may benefit from refinement. Current: [quote]. Observation: [what's changed]. Suggested update: [concrete revision]. This shapes all future project proposals.
      IF the domain anchor is current and well-scoped:
        Identify the highest-value next project direction not yet proposed.
-       APPEND to NOTIFICATIONS.md (standalone) as MEDIUM:
-         "Strategic direction: next project should focus on [area]. Rationale:
-         [why this follows from domain anchor + completed work]. Worker will
-         pick this up as a Tier 4 proposal on next idle cycle."
+       Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: MEDIUM | Project: system | Status: STRATEGIC-DIRECTION \nStrategic direction: next project should focus on [area]. Rationale: [why this follows from domain anchor + completed work]. Worker will pick this up as a Tier 4 proposal on next idle cycle.
      Go to T8.
 
   RECOMMENDED:T3.5-D → no action needed.
-     APPEND one-liner to memory/YYYY-MM-DD.md (inline, not via bundle):
-       "[T3.5] System idle. No strategic action needed."
+     Execute: python3 scripts/nightclaw-ops.py append memory/YYYY-MM-DD.md [T3.5] System idle. No strategic action needed.
      Go to T8.
 
 ─────────────────────────────────────────────
@@ -184,7 +165,7 @@ T4  VALUE CHECK
     READ PROJECTS/[slug]/LONGRUNNER.md last_pass.
     READ recent memory/YYYY-MM-DD.md entries.
     READ orchestration-os/OPS-QUALITY-STANDARD.md §Manager Value Methodology — apply four-question test.
-    Flag consecutive WEAK/FAIL → NOTIFICATIONS.md.
+    Flag consecutive WEAK/FAIL → Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: HIGH | Project: [slug] | Status: QUALITY-CONCERN \n[details]
 
 T5  DIRECTION CHECK
   Root problem correctly framed? Existing knowledge used? Priority order correct?
@@ -210,33 +191,36 @@ T8  AUDIT REVIEW + OS IMPROVEMENT  (mandatory every cycle)
   AUDIT ANOMALY SCAN:
     Execute: python3 scripts/nightclaw-ops.py audit-anomalies
     Output: ANOMALY:<severity>:<type>:<details> lines, or CLEAN.
-    For each ANOMALY: surface to NOTIFICATIONS.md at the indicated severity.
-  No anomalies: TASK:[run_id].T8 | TYPE:MANAGER_REVIEW | RESULT:PASS | ENTRIES:[n]
+    For each ANOMALY: Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: [severity] | Project: system | Status: AUDIT-ANOMALY \n[details]
+  No anomalies: Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T8 | TYPE:MANAGER_REVIEW | RESULT:PASS | ENTRIES:[n]
 
-  CRITICAL: audit/AUDIT-LOG.md is APPEND-ONLY. Every write to this file must append a new line.
-  Never overwrite, truncate, or rewrite existing content. Use file append — not file write.
-
-  NOTIFICATIONS.md is APPEND-ONLY for new entries. Never overwrite, truncate, or replace
-  existing content when adding new entries. Use file append — not file write.
-  Exception: T8.3 NOTIFICATIONS PRUNING below may move resolved entries to archive.
+  APPEND-ONLY FILES — MANDATORY TOOL USAGE:
+  Never use the Edit tool or WriteFile tool for APPEND-ONLY files.
+  Always use: python3 scripts/nightclaw-ops.py append <file> <line>
+  Or for multiple lines: python3 scripts/nightclaw-ops.py append-batch <file> <line1> ||| <line2>
+  The script enforces the allowlist — only APPEND-tier files in REGISTRY.md R3 are accepted.
+  This applies to: audit/AUDIT-LOG.md, audit/SESSION-REGISTRY.md, audit/CHANGE-LOG.md,
+  audit/APPROVAL-CHAIN.md, NOTIFICATIONS.md, NOTIFICATIONS-ARCHIVE.md, AGENTS-LESSONS.md,
+  and memory/YYYY-MM-DD.md.
+  Exception: T8.3 NOTIFICATIONS PRUNING below may move resolved entries to archive (uses Edit to remove lines).
 
   T8.3  NOTIFICATIONS PRUNING (every cycle)
     Execute: python3 scripts/nightclaw-ops.py prune-candidates
     Output: PRUNE:line=<n>:reason=<reason>:<preview> lines, or NONE.
     NONE → skip silently.
     For each PRUNE entry:
-      1. APPEND the entry verbatim to NOTIFICATIONS-ARCHIVE.md
-         (create file if it does not exist)
+      1. Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS-ARCHIVE.md [verbatim entry text]
+         (script creates file if it does not exist)
       2. Remove the entry from NOTIFICATIONS.md
     Preserve all non-qualifying entries in their original order.
     Preserve the file header (lines above "## Current Alerts") unchanged.
-    Log: TASK:[run_id].T8.3 | TYPE:NOTIFICATIONS_PRUNE | MOVED:[n] | REMAINING:[n]
+    Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T8.3 | TYPE:NOTIFICATIONS_PRUNE | MOVED:[n] | REMAINING:[n]
     If no entries qualify: skip silently. Do not log.
 
   REGISTRY SELF-CONSISTENCY (monthly or when REGISTRY.md modified):
     Execute: python3 scripts/nightclaw-ops.py scr-verify
     Output: SCR-NN:PASS or SCR-NN:FAIL per rule, plus RESULT:PASS or RESULT:FAIL.
-    Any FAIL → NOTIFICATIONS.md HIGH.
+    Any FAIL → Execute: python3 scripts/nightclaw-ops.py append NOTIFICATIONS.md [ISO8601Z now] | Priority: HIGH | Project: system | Status: SCR-FAIL \n[details]
 
   OS IMPROVEMENT:
     Pattern in failures? Doctrine gap? One concrete update to one OPS file.
@@ -252,9 +236,9 @@ T9  SESSION CLOSE  ← MANDATORY. Always execute. No exceptions.
   If you are about to stop without executing T9: stop, execute T9 first.
 
   BUNDLE:session_close executes these writes in order:
-  1. APPEND to audit/SESSION-REGISTRY.md: run_id, session, outcome
-  2. APPEND to memory/YYYY-MM-DD.md: structured pass log
-  3. APPEND to audit/AUDIT-LOG.md: TASK:[run].T9 TYPE:SESSION_CLOSE RESULT:SUCCESS
+  1. Execute: python3 scripts/nightclaw-ops.py append audit/SESSION-REGISTRY.md [session registry entry]
+  2. Execute: python3 scripts/nightclaw-ops.py append memory/YYYY-MM-DD.md [structured pass log]
+  3. Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run].T9 | TYPE:SESSION_CLOSE | RESULT:SUCCESS
   4. OVERWRITE LOCK.md: status=released, all other fields —
 
   The lock MUST be released at step 4.

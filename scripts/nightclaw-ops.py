@@ -25,6 +25,8 @@ Commands:
   strategic-context   T3.5-manager: Pre-digest strategic context for idle manager
   t7-dedup            T7: Check if a signal is already documented in target file
   crash-context       T0: Retrieve context from a crashed session for recovery
+  append              Append a single line to an APPEND-ONLY file (safe exec-based alternative to Edit tool)
+  append-batch        Append multiple lines to an APPEND-ONLY file in one call (||| delimited)
 
 All output is machine-parseable. LLM reads output and acts on it.
 LLM never does the computation itself.
@@ -1747,6 +1749,98 @@ def cmd_crash_context():
 
 
 # ---------------------------------------------------------------------------
+# append: Safe file append for APPEND-ONLY files
+# ---------------------------------------------------------------------------
+
+# Allowed append targets — only files marked APPEND in REGISTRY.md R3.
+# Agent cannot append to arbitrary files via this command.
+APPEND_ALLOWED = {
+    "audit/AUDIT-LOG.md",
+    "audit/SESSION-REGISTRY.md",
+    "audit/CHANGE-LOG.md",
+    "audit/APPROVAL-CHAIN.md",
+    "NOTIFICATIONS.md",
+    "NOTIFICATIONS-ARCHIVE.md",
+    "AGENTS-LESSONS.md",
+}
+# memory/YYYY-MM-DD.md is allowed dynamically (pattern match below).
+
+def _is_allowed_append_target(rel_path):
+    """Check if a relative path is an allowed append target."""
+    normalized = rel_path.replace("\\", "/").strip("/")
+    if normalized in APPEND_ALLOWED:
+        return True
+    # memory/YYYY-MM-DD.md pattern
+    if re.match(r"^memory/\d{4}-\d{2}-\d{2}\.md$", normalized):
+        return True
+    return False
+
+def cmd_append():
+    """Append a line to an APPEND-ONLY file. Safe alternative to Edit tool.
+
+    Usage: python3 scripts/nightclaw-ops.py append <file> <line>
+    The line is appended with a trailing newline.
+    File is created if it does not exist (parent directory must exist).
+    Only files listed in APPEND_ALLOWED or matching memory/YYYY-MM-DD.md are accepted.
+    """
+    if len(sys.argv) < 4:
+        print("ERROR:MISSING_ARGS — usage: append <file> <line>", file=sys.stderr)
+        sys.exit(2)
+
+    rel_path = sys.argv[2]
+    line = " ".join(sys.argv[3:])
+
+    if not _is_allowed_append_target(rel_path):
+        print(f"ERROR:DENIED — {rel_path} is not an allowed append target")
+        print(f"ALLOWED: {', '.join(sorted(APPEND_ALLOWED))} + memory/YYYY-MM-DD.md")
+        sys.exit(1)
+
+    target = ROOT / rel_path
+
+    # Ensure parent directory exists (for memory/YYYY-MM-DD.md on first write)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    # Append with trailing newline
+    with open(target, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+    print(f"APPENDED:{rel_path}")
+
+
+def cmd_append_batch():
+    """Append multiple lines to an APPEND-ONLY file in one call.
+
+    Usage: python3 scripts/nightclaw-ops.py append-batch <file> <line1> ||| <line2> ||| <line3>
+    Lines are separated by ' ||| ' delimiter.
+    Useful for BUNDLE writes that append multiple entries to the same file.
+    """
+    if len(sys.argv) < 4:
+        print("ERROR:MISSING_ARGS — usage: append-batch <file> <line1> ||| <line2>", file=sys.stderr)
+        sys.exit(2)
+
+    rel_path = sys.argv[2]
+    raw = " ".join(sys.argv[3:])
+    lines = [l.strip() for l in raw.split("|||") if l.strip()]
+
+    if not lines:
+        print("ERROR:NO_LINES — no non-empty lines found after splitting on |||")
+        sys.exit(1)
+
+    if not _is_allowed_append_target(rel_path):
+        print(f"ERROR:DENIED — {rel_path} is not an allowed append target")
+        sys.exit(1)
+
+    target = ROOT / rel_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(target, "a", encoding="utf-8") as f:
+        for line in lines:
+            f.write(line + "\n")
+
+    print(f"APPENDED:{rel_path}:LINES={len(lines)}")
+
+
+# ---------------------------------------------------------------------------
 # Main dispatcher
 # ---------------------------------------------------------------------------
 
@@ -1769,6 +1863,8 @@ COMMANDS = {
     "strategic-context": cmd_strategic_context,
     "t7-dedup": cmd_t7_dedup,
     "crash-context": cmd_crash_context,
+    "append": cmd_append,
+    "append-batch": cmd_append_batch,
 }
 
 def main():
