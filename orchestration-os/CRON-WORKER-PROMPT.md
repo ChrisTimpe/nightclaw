@@ -70,10 +70,11 @@ T0  INTEGRITY CHECK
 T1  DISPATCH
 ─────────────────────────────────────────────
   Execute: python3 scripts/nightclaw-ops.py dispatch
-  Output: DISPATCH:<slug> (proceed with that project) or IDLE (go to T1.5).
   The script applies all filtering rules (status, escalation_pending, priority sort).
-  DISPATCH:<slug> → proceed to T2 with that slug.
-  IDLE → go to T1.5.
+  Output:
+    DISPATCH:<slug> → proceed to T2 with that slug.
+    ADVANCE:<slug>  → proceed to T2-ADVANCE with that slug.
+    IDLE            → go to T1.5.
 
 ─────────────────────────────────────────────
 T1.5  NOTIFICATIONS CHECK + IDLE TRIAGE (runs ONLY when T1 found no active project)
@@ -108,6 +109,48 @@ T1.5  NOTIFICATIONS CHECK + IDLE TRIAGE (runs ONLY when T1 found no active proje
       Write one line to memory/YYYY-MM-DD.md:
         "[IDLE CYCLE — timestamp] All tiers checked. No actionable work found. System current."
       Go to T9.
+
+─────────────────────────────────────────────
+T2-ADVANCE  PHASE ADVANCE (runs ONLY when T1 returned ADVANCE:<slug>)
+─────────────────────────────────────────────
+  The {OWNER} has approved a phase transition (via nightclaw-admin done or
+  via PA-001 phase-auto-transition pre-approval).
+
+  READ PROJECTS/[slug]/LONGRUNNER.md — extract phase.successor.
+  IF successor is empty → BUNDLE:surface_escalation("No successor defined for [slug]") → T9.
+
+  PA BOUNDARY CHECK (only if PA-triggered, not owner-approved):
+    READ orchestration-os/OPS-PREAPPROVAL.md.
+    Find the PA entry with action_class=phase-auto-transition.
+    Read its Boundary field. Evaluate whether advancing to [successor] violates
+    the boundary (e.g., "Do not advance to implementation or deployment phases").
+    IF boundary violated → BUNDLE:surface_escalation("PA boundary prevents advance to [successor]") → T9.
+    IF boundary OK → log PA invocation:
+      Execute: python3 scripts/nightclaw-ops.py append audit/APPROVAL-CHAIN.md PA-001-INV-[NNN] | action=phase-advance | slug=[slug] | successor=[successor] | result=AUTHORIZED
+
+  BUNDLE:phase_advance — write these fields in order:
+    LONGRUNNER:
+      phase.name = [successor]
+      phase.status = "ACTIVE"
+      phase.started = [today YYYY-MM-DD]
+      phase.successor = ""
+      phase.objective = ""
+      phase.stop_condition = ""
+      transition_triggered_at = ~
+      transition_expires = ~
+      transition_reescalation_count = 0
+      next_pass.objective = "Initialize [successor] phase: review prior phase outputs, define phase objective and stop conditions for [successor]."
+      next_pass.pass_type = "build-iteration"
+    ACTIVE-PROJECTS.md:
+      phase = [successor]
+      status = ACTIVE
+      escalation_pending = none
+
+  Log: audit/CHANGE-LOG.md → one entry per changed field (actor=worker, bundle=BUNDLE:phase_advance)
+  Log: audit/AUDIT-LOG.md → TASK:[run_id].T2 | TYPE:BUNDLE | RESULT:SUCCESS
+
+  After phase_advance completes, continue to T2 with the same slug.
+  (The project is now ACTIVE with a bootstrap objective. Normal T2→T4→T6 flow.)
 
 ─────────────────────────────────────────────
 T2  LONGRUNNER
@@ -206,6 +249,13 @@ T6  STATE UPDATE
     (one line per clause)
 
   IF ALL clauses are TRUE:
+    Determine the recommended successor phase. Consider:
+      - The project mission (## Mission section of LONGRUNNER)
+      - What was accomplished in this phase
+      - What logically comes next in the project lifecycle
+    Write phase.successor in the LONGRUNNER with the recommended phase name.
+    Use descriptive names (e.g., full-scale-run, quality-assurance, publish-prep, deployment).
+
     Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T6 | TYPE:STOP_EVAL | RESULT:ALL_TRUE | CLAUSES:[count]
     → BUNDLE:phase_transition. Do not write next_pass.
     The stop condition is met. Quality improvements belong in the next phase, not this one.

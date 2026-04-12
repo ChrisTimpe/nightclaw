@@ -69,6 +69,7 @@ OBJ:PROJ | phase.objective       | TEXT   | Y | NOT EMPTY                       
 OBJ:PROJ | next_pass.objective   | TEXT   | Y | NOT EMPTY — empty triggers stale-halt | -
 OBJ:PROJ | next_pass.model_tier  | ENUM   | Y | lightweight|standard|heavy         | default=standard
 OBJ:PROJ | next_pass.context_budget | ENUM | Y | 40K|80K|120K|200K               | default=80K
+OBJ:PROJ | phase.successor       | TEXT   | N | next phase name — worker proposes at T6 phase_transition | -
 OBJ:PROJ | last_pass.quality     | ENUM   | N | STRONG|ADEQUATE|WEAK|FAIL          | -
 
 OBJ:TASK | task_id               | TOKEN  | Y | PK RUN-YYYYMMDD-NNN.Tstep         | composite PK
@@ -148,6 +149,7 @@ OBJ:FM       | status            | ENUM   | Y | OPEN|MITIGATED|RESOLVED         
 ACTIVE-PROJECTS.md(update)        | STANDARD        | BUNDLE:longrunner_update  | T6 state sync after pass
 ACTIVE-PROJECTS.md(block)         | STANDARD        | BUNDLE:route_block        | T2/T2.7/T3 blocking
 ACTIVE-PROJECTS.md(transition)    | STANDARD        | BUNDLE:phase_transition   | Phase complete
+ACTIVE-PROJECTS.md(advance)       | STANDARD        | BUNDLE:phase_advance      | Phase advance to successor
 ACTIVE-PROJECTS.md(escalation)    | STANDARD        | BUNDLE:surface_escalation | Surfacing to {OWNER}
 PROJECTS/*/LONGRUNNER.md          | STANDARD        | BUNDLE:longrunner_update  | Always via bundle, never raw
 PROJECTS/*/LONGRUNNER-DRAFT.md    | STANDARD        | standalone                | Worker idle-cycle Tier 4 writes; manager T3.5 reads; {OWNER} renames to LONGRUNNER.md on approval
@@ -242,6 +244,10 @@ AGENTS-CORE.md              → REFERENCES → AGENTS.md
 LOCK.md                     → READS      → worker:STARTUP
 LOCK.md                     → READS      → manager:STARTUP
 BUNDLE:session_close        → WRITES     → LOCK.md (release)
+BUNDLE:phase_advance     → WRITES  → PROJECTS/*/LONGRUNNER.md
+BUNDLE:phase_advance     → WRITES  → ACTIVE-PROJECTS.md
+BUNDLE:phase_advance     → WRITES  → audit/CHANGE-LOG.md
+BUNDLE:phase_advance     → WRITES  → audit/AUDIT-LOG.md
 orchestration-os/OPS-PREAPPROVAL.md → AUTHORIZES → BUNDLE:pa_invoke
 orchestration-os/OPS-PREAPPROVAL.md → REFERENCES → audit/APPROVAL-CHAIN.md
 # Documentation cross-reference edges.
@@ -272,14 +278,30 @@ BUNDLE:longrunner_update
 BUNDLE:phase_transition
   TRIGGER: T6 when LONGRUNNER stop_condition met
   WRITES: PROJECTS/[slug]/LONGRUNNER.md → phase.status=COMPLETE,
+            phase.successor=[recommended next phase],
             transition_triggered_at=[ISO8601Z now],
             transition_expires=[ISO8601Z now + transition_timeout_days],
             transition_reescalation_count=0
           ACTIVE-PROJECTS.md → status=TRANSITION-HOLD, escalation_pending=phase-complete-[name]
-          NOTIFICATIONS.md → PRIORITY:HIGH action_needed="Confirm phase transition"
-          audit/CHANGE-LOG.md → entries for phase.status, transition_triggered_at, transition_expires, status, escalation_pending
+          NOTIFICATIONS.md → PRIORITY:HIGH action_needed="Confirm phase transition to [successor]"
+          audit/CHANGE-LOG.md → entries for phase.status, phase.successor, transition fields, status, escalation
           audit/AUDIT-LOG.md → APPEND: TASK:[run].T6 TYPE:BUNDLE RESULT:SUCCESS
   VALIDATES: current phase.status=ACTIVE | slug exists in DISPATCH
+
+BUNDLE:phase_advance
+  TRIGGER: T2-ADVANCE when dispatch returns ADVANCE:<slug>
+  WRITES: PROJECTS/[slug]/LONGRUNNER.md →
+            phase.name=[successor], phase.status=ACTIVE,
+            phase.started=[today], phase.successor="",
+            phase.objective="", phase.stop_condition="",
+            transition_triggered_at=~, transition_expires=~,
+            transition_reescalation_count=0,
+            next_pass.objective="Initialize [successor] phase: review prior phase outputs, define phase objective and stop conditions."
+            next_pass.pass_type="build-iteration"
+          ACTIVE-PROJECTS.md → phase=[successor], status=ACTIVE, escalation_pending=none
+          audit/CHANGE-LOG.md → entries for all changed fields
+          audit/AUDIT-LOG.md → APPEND: TASK:[run].T2 TYPE:BUNDLE RESULT:SUCCESS
+  VALIDATES: successor NOT EMPTY | phase.status=COMPLETE
 
 BUNDLE:route_block
   TRIGGER: T2 BLOCKED | T2.7 unauthorized | T3 tool unavailable
