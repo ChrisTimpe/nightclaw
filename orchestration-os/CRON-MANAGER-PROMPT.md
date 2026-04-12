@@ -1,6 +1,6 @@
 # CRON-MANAGER-PROMPT.md — NightClaw Manager
-# v0.2.1 | Govern. Verify. Direct. Do not execute project tasks.
-# Requires: --session "session:nightclaw-manager" --light-context --no-deliver
+# v0.2.2 | Govern. Verify. Direct. Do not execute project tasks.
+# Requires: --session isolated --light-context --no-deliver
 
 ---
 
@@ -253,7 +253,7 @@ STOP.
 openclaw cron add \
   --name "nightclaw-manager-trigger" \
   --every 24h \
-  --session "session:nightclaw-manager" \
+  --session isolated \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-MANAGER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
   --no-deliver \

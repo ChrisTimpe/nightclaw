@@ -1,6 +1,6 @@
 # CRON-WORKER-PROMPT.md — NightClaw Worker
-# v0.2.1 | One pass. One objective. Structured. Audited. Then stop.
-# Requires: --session "session:nightclaw-worker" --light-context --no-deliver
+# v0.2.2 | One pass. One objective. Structured. Audited. Then stop.
+# Requires: --session isolated --light-context --no-deliver
 
 ---
 
@@ -195,8 +195,24 @@ T5.5  QUALITY
 ─────────────────────────────────────────────
 T6  STATE UPDATE
 ─────────────────────────────────────────────
-  Stop condition met → BUNDLE:phase_transition.
-  Otherwise         → BUNDLE:longrunner_update.
+  STOP CONDITION GATE — execute before any state write.
+  Read phase.stop_condition from the longrunner-extract output.
+  Decompose the stop condition into individual clauses.
+  Evaluate each clause as TRUE or FALSE against the artifacts produced this pass
+  and any artifacts already present from prior passes.
+
+  Output the evaluation:
+    STOP_EVAL: clause="[text]" result=TRUE|FALSE
+    (one line per clause)
+
+  IF ALL clauses are TRUE:
+    Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T6 | TYPE:STOP_EVAL | RESULT:ALL_TRUE | CLAUSES:[count]
+    → BUNDLE:phase_transition. Do not write next_pass.
+    The stop condition is met. Quality improvements belong in the next phase, not this one.
+
+  IF ANY clause is FALSE:
+    Execute: python3 scripts/nightclaw-ops.py append audit/AUDIT-LOG.md TASK:[run_id].T6 | TYPE:STOP_EVAL | RESULT:INCOMPLETE | FALSE_CLAUSES:[list]
+    → BUNDLE:longrunner_update. Set next_pass.objective to address the FALSE clause(s).
 
 ─────────────────────────────────────────────
 T7  OS IMPROVEMENT  (assessment mandatory — write only if gate passes)
@@ -267,7 +283,7 @@ STOP. Do not begin another pass.
 openclaw cron add \
   --name "nightclaw-worker-trigger" \
   --every 3h \
-  --session "session:nightclaw-worker" \
+  --session isolated \
   --message "HARD LINES ACTIVE: never post externally, never write outside workspace, never modify cron schedule, employment constraint enforced (see USER.md). Step 1: READ orchestration-os/CRON-HARDLINES.md. Step 2: READ orchestration-os/CRON-WORKER-PROMPT.md. Step 3: Follow it exactly from T0 through T9. Do not improvise steps." \
   --light-context \
   --no-deliver \
