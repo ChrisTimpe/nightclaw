@@ -572,9 +572,8 @@ content = replace_yaml_field(content, 'name', successor)
 content = replace_yaml_field(content, 'status', 'ACTIVE')
 content = replace_yaml_field(content, 'started', today)
 
-# Clear objective and stop_condition — worker populates on first pass
-content = replace_yaml_field(content, 'objective', '')
-content = replace_yaml_field(content, 'stop_condition', '')
+# Leave objective and stop_condition as-is — worker already populated them.
+# Worker updates at T6 if they need to change for the new phase.
 
 # Clear transition fields
 content = re.sub(r'(transition_triggered_at:\s*)\"[^\"]*\"', r'\g<1>~', content)
