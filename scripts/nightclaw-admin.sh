@@ -12,6 +12,8 @@ set -euo pipefail
 #   decline <slug> [reason]     Decline a draft → delete it
 #   pause <slug>                Pause an active project
 #   unpause <slug>              Resume a paused project
+#   unblock <slug>              Clear a worker-set block (BLOCKED → ACTIVE)
+#   advance <slug>              Confirm phase transition (TRANSITION-HOLD → ACTIVE)
 #   priority <slug> <n>         Set project priority
 #   done <line-number>          Mark a NOTIFICATIONS.md entry resolved
 #   guide <message>             Inject guidance the worker picks up at T1.5
@@ -480,6 +482,50 @@ cmd_unpause() {
     info "Project '$slug' resumed. Worker will route to it based on priority."
 }
 
+cmd_unblock() {
+    local slug="${1:-}"
+    validate_slug "$slug"
+
+    local current_status
+    current_status=$(get_project_field "$slug" 5) || error "Project '$slug' not found in ACTIVE-PROJECTS.md"
+
+    [[ "$current_status" == "BLOCKED" ]] || [[ "$current_status" == "blocked" ]] || \
+        error "Cannot unblock project with status '$current_status'. Must be 'BLOCKED'."
+
+    local old_escalation
+    old_escalation=$(get_project_field "$slug" 7) || old_escalation="unknown"
+
+    update_project_field "$slug" 5 "ACTIVE" > /dev/null
+    update_project_field "$slug" 7 "none" > /dev/null
+    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.status" "$current_status" "ACTIVE" "owner unblocked via nightclaw-admin"
+    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.escalation_pending" "$old_escalation" "none" "owner cleared escalation via nightclaw-admin"
+    audit_log "TYPE:ADMIN_UNBLOCK | RESULT:SUCCESS | PROJECT:$slug | PREV_ESCALATION:${old_escalation:0:200}"
+
+    info "Project '$slug' unblocked (was: $old_escalation). Worker will route to it on next pass."
+}
+
+cmd_advance() {
+    local slug="${1:-}"
+    validate_slug "$slug"
+
+    local current_status
+    current_status=$(get_project_field "$slug" 5) || error "Project '$slug' not found in ACTIVE-PROJECTS.md"
+
+    [[ "$current_status" == "TRANSITION-HOLD" ]] || \
+        error "Cannot advance project with status '$current_status'. Must be 'TRANSITION-HOLD'."
+
+    local old_escalation
+    old_escalation=$(get_project_field "$slug" 7) || old_escalation="unknown"
+
+    update_project_field "$slug" 5 "ACTIVE" > /dev/null
+    update_project_field "$slug" 7 "none" > /dev/null
+    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.status" "$current_status" "ACTIVE" "owner confirmed phase transition via nightclaw-admin"
+    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.escalation_pending" "$old_escalation" "none" "owner cleared escalation via nightclaw-admin"
+    audit_log "TYPE:ADMIN_ADVANCE | RESULT:SUCCESS | PROJECT:$slug | PREV_ESCALATION:${old_escalation:0:200}"
+
+    info "Project '$slug' advanced. Worker will set up the next phase on its next pass."
+}
+
 cmd_priority() {
     local slug="${1:-}"
     local new_priority="${2:-}"
@@ -728,6 +774,8 @@ usage() {
     echo "  decline <slug> [reason]     Decline and delete a draft"
     echo "  pause <slug>                Pause an active project"
     echo "  unpause <slug>              Resume a paused project"
+    echo "  unblock <slug>              Clear a worker-set block"
+    echo "  advance <slug>              Confirm phase transition (from TRANSITION-HOLD)"
     echo "  priority <slug> <n>         Set project priority number"
     echo ""
     echo -e "${BOLD}Communication:${NC}"
@@ -753,6 +801,8 @@ case "$CMD" in
     decline)    cmd_decline "$@" ;;
     pause)      cmd_pause "$@" ;;
     unpause)    cmd_unpause "$@" ;;
+    unblock)    cmd_unblock "$@" ;;
+    advance)    cmd_advance "$@" ;;
     priority)   cmd_priority "$@" ;;
     done)       cmd_done "$@" ;;
     guide)      cmd_guide "$@" ;;
