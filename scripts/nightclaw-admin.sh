@@ -514,16 +514,99 @@ cmd_advance() {
     [[ "$current_status" == "TRANSITION-HOLD" ]] || \
         error "Cannot advance project with status '$current_status'. Must be 'TRANSITION-HOLD'."
 
+    local longrunner="PROJECTS/$slug/LONGRUNNER.md"
+    [[ -f "$longrunner" ]] || error "LONGRUNNER not found at $longrunner"
+
+    # Read successor phase name from LONGRUNNER
+    local successor
+    successor=$(python3 -c "
+import sys, re
+with open(sys.argv[1]) as f:
+    content = f.read()
+m = re.search(r'successor:\s*\"([^\"]+)\"', content)
+if m:
+    print(m.group(1))
+else:
+    print('')
+" "$longrunner")
+
+    [[ -n "$successor" ]] || error "No phase.successor defined in $longrunner. Cannot advance."
+
+    local old_phase
+    old_phase=$(python3 -c "
+import sys, re
+with open(sys.argv[1]) as f:
+    content = f.read()
+m = re.search(r'name:\s*\"([^\"]+)\"', content)
+if m:
+    print(m.group(1))
+else:
+    print('')
+" "$longrunner")
+
+    # Update LONGRUNNER phase block: advance to successor, clear transition fields
+    python3 -c "
+import sys, re
+from datetime import datetime
+
+slug = sys.argv[1]
+successor = sys.argv[2]
+filepath = sys.argv[3]
+today = datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
+
+with open(filepath, 'r') as f:
+    content = f.read()
+
+# Update phase fields in the YAML block
+def replace_yaml_field(content, field, new_value):
+    pattern = r'(' + re.escape(field) + r':\s*)\"[^\"]*\"'
+    replacement = r'\g<1>\"' + new_value + '\"'
+    result = re.sub(pattern, replacement, content)
+    if result == content:
+        # Try unquoted format
+        pattern2 = r'(' + re.escape(field) + r':\s*)\S+'
+        result = re.sub(pattern2, r'\g<1>\"' + new_value + '\"', content)
+    return result
+
+content = replace_yaml_field(content, 'name', successor)
+content = replace_yaml_field(content, 'status', 'ACTIVE')
+content = replace_yaml_field(content, 'started', today)
+
+# Clear objective and stop_condition — worker populates on first pass
+content = replace_yaml_field(content, 'objective', '')
+content = replace_yaml_field(content, 'stop_condition', '')
+
+# Clear transition fields
+content = re.sub(r'(transition_triggered_at:\s*)\"[^\"]*\"', r'\g<1>~', content)
+content = re.sub(r'(transition_triggered_at:\s*)\S+', r'\g<1>~', content)
+content = re.sub(r'(transition_expires:\s*)\"[^\"]*\"', r'\g<1>~', content)
+content = re.sub(r'(transition_expires:\s*)\S+', r'\g<1>~', content)
+content = re.sub(r'(transition_reescalation_count:\s*)\d+', r'\g<1>0', content)
+
+with open(filepath, 'w') as f:
+    f.write(content)
+" "$slug" "$successor" "$longrunner" || {
+        error "Failed to update LONGRUNNER. ACTIVE-PROJECTS.md not changed."
+    }
+
+    # Update ACTIVE-PROJECTS.md
     local old_escalation
     old_escalation=$(get_project_field "$slug" 7) || old_escalation="unknown"
 
+    # Update phase column in ACTIVE-PROJECTS (field 4)
+    update_project_field "$slug" 4 "$successor" > /dev/null
     update_project_field "$slug" 5 "ACTIVE" > /dev/null
     update_project_field "$slug" 7 "none" > /dev/null
+
+    # Change log entries
+    change_log "FILE:PROJECTS/${slug}/LONGRUNNER.md#phase.name" "${old_phase}" "${successor}" "owner advanced phase via nightclaw-admin"
+    change_log "FILE:PROJECTS/${slug}/LONGRUNNER.md#phase.status" "COMPLETE" "ACTIVE" "owner advanced phase via nightclaw-admin"
+    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.phase" "${old_phase}" "${successor}" "owner advanced phase via nightclaw-admin"
     change_log "FILE:ACTIVE-PROJECTS.md#${slug}.status" "$current_status" "ACTIVE" "owner confirmed phase transition via nightclaw-admin"
     change_log "FILE:ACTIVE-PROJECTS.md#${slug}.escalation_pending" "$old_escalation" "none" "owner cleared escalation via nightclaw-admin"
-    audit_log "TYPE:ADMIN_ADVANCE | RESULT:SUCCESS | PROJECT:$slug | PREV_ESCALATION:${old_escalation:0:200}"
+    audit_log "TYPE:ADMIN_ADVANCE | RESULT:SUCCESS | PROJECT:$slug | FROM_PHASE:${old_phase} | TO_PHASE:${successor} | PREV_ESCALATION:${old_escalation:0:200}"
 
-    info "Project '$slug' advanced. Worker will set up the next phase on its next pass."
+    info "Project '$slug' advanced: ${old_phase} → ${successor}. Phase is ACTIVE, worker picks up on next pass."
 }
 
 cmd_priority() {
