@@ -547,12 +547,12 @@ else:
     # Update LONGRUNNER phase block: advance to successor, clear transition fields
     python3 -c "
 import sys, re
-from datetime import datetime
+from datetime import datetime, timezone
 
 slug = sys.argv[1]
 successor = sys.argv[2]
 filepath = sys.argv[3]
-today = datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
+today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
 with open(filepath, 'r') as f:
     content = f.read()
