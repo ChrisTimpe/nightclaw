@@ -12,8 +12,7 @@ set -euo pipefail
 #   decline <slug> [reason]     Decline a draft → delete it
 #   pause <slug>                Pause an active project
 #   unpause <slug>              Resume a paused project
-#   unblock <slug>              Clear a worker-set block (BLOCKED → ACTIVE)
-#   advance <slug>              Confirm phase transition (TRANSITION-HOLD → ACTIVE)
+#   (advance and unblock removed — phase transitions are now agent-driven via 'done')
 #   priority <slug> <n>         Set project priority
 #   done <line-number>          Mark a NOTIFICATIONS.md entry resolved
 #   guide <message>             Inject guidance the worker picks up at T1.5
@@ -482,131 +481,9 @@ cmd_unpause() {
     info "Project '$slug' resumed. Worker will route to it based on priority."
 }
 
-cmd_unblock() {
-    local slug="${1:-}"
-    validate_slug "$slug"
-
-    local current_status
-    current_status=$(get_project_field "$slug" 5) || error "Project '$slug' not found in ACTIVE-PROJECTS.md"
-
-    [[ "$current_status" == "BLOCKED" ]] || [[ "$current_status" == "blocked" ]] || \
-        error "Cannot unblock project with status '$current_status'. Must be 'BLOCKED'."
-
-    local old_escalation
-    old_escalation=$(get_project_field "$slug" 7) || old_escalation="unknown"
-
-    update_project_field "$slug" 5 "ACTIVE" > /dev/null
-    update_project_field "$slug" 7 "none" > /dev/null
-    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.status" "$current_status" "ACTIVE" "owner unblocked via nightclaw-admin"
-    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.escalation_pending" "$old_escalation" "none" "owner cleared escalation via nightclaw-admin"
-    audit_log "TYPE:ADMIN_UNBLOCK | RESULT:SUCCESS | PROJECT:$slug | PREV_ESCALATION:${old_escalation:0:200}"
-
-    info "Project '$slug' unblocked (was: $old_escalation). Worker will route to it on next pass."
-}
-
-cmd_advance() {
-    local slug="${1:-}"
-    validate_slug "$slug"
-
-    local current_status
-    current_status=$(get_project_field "$slug" 5) || error "Project '$slug' not found in ACTIVE-PROJECTS.md"
-
-    [[ "$current_status" == "TRANSITION-HOLD" ]] || \
-        error "Cannot advance project with status '$current_status'. Must be 'TRANSITION-HOLD'."
-
-    local longrunner="PROJECTS/$slug/LONGRUNNER.md"
-    [[ -f "$longrunner" ]] || error "LONGRUNNER not found at $longrunner"
-
-    # Read successor phase name from LONGRUNNER
-    local successor
-    successor=$(python3 -c "
-import sys, re
-with open(sys.argv[1]) as f:
-    content = f.read()
-m = re.search(r'successor:\s*\"([^\"]+)\"', content)
-if m:
-    print(m.group(1))
-else:
-    print('')
-" "$longrunner")
-
-    [[ -n "$successor" ]] || error "No phase.successor defined in $longrunner. Cannot advance."
-
-    local old_phase
-    old_phase=$(python3 -c "
-import sys, re
-with open(sys.argv[1]) as f:
-    content = f.read()
-m = re.search(r'name:\s*\"([^\"]+)\"', content)
-if m:
-    print(m.group(1))
-else:
-    print('')
-" "$longrunner")
-
-    # Update LONGRUNNER phase block: advance to successor, clear transition fields
-    python3 -c "
-import sys, re
-from datetime import datetime, timezone
-
-slug = sys.argv[1]
-successor = sys.argv[2]
-filepath = sys.argv[3]
-today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-
-with open(filepath, 'r') as f:
-    content = f.read()
-
-# Update phase fields in the YAML block
-def replace_yaml_field(content, field, new_value):
-    pattern = r'(' + re.escape(field) + r':\s*)\"[^\"]*\"'
-    replacement = r'\g<1>\"' + new_value + '\"'
-    result = re.sub(pattern, replacement, content)
-    if result == content:
-        # Try unquoted format
-        pattern2 = r'(' + re.escape(field) + r':\s*)\S+'
-        result = re.sub(pattern2, r'\g<1>\"' + new_value + '\"', content)
-    return result
-
-content = replace_yaml_field(content, 'name', successor)
-content = replace_yaml_field(content, 'status', 'ACTIVE')
-content = replace_yaml_field(content, 'started', today)
-
-# Leave objective and stop_condition as-is — worker already populated them.
-# Worker updates at T6 if they need to change for the new phase.
-
-# Clear transition fields
-content = re.sub(r'(transition_triggered_at:\s*)\"[^\"]*\"', r'\g<1>~', content)
-content = re.sub(r'(transition_triggered_at:\s*)\S+', r'\g<1>~', content)
-content = re.sub(r'(transition_expires:\s*)\"[^\"]*\"', r'\g<1>~', content)
-content = re.sub(r'(transition_expires:\s*)\S+', r'\g<1>~', content)
-content = re.sub(r'(transition_reescalation_count:\s*)\d+', r'\g<1>0', content)
-
-with open(filepath, 'w') as f:
-    f.write(content)
-" "$slug" "$successor" "$longrunner" || {
-        error "Failed to update LONGRUNNER. ACTIVE-PROJECTS.md not changed."
-    }
-
-    # Update ACTIVE-PROJECTS.md
-    local old_escalation
-    old_escalation=$(get_project_field "$slug" 7) || old_escalation="unknown"
-
-    # Update phase column in ACTIVE-PROJECTS (field 4)
-    update_project_field "$slug" 4 "$successor" > /dev/null
-    update_project_field "$slug" 5 "ACTIVE" > /dev/null
-    update_project_field "$slug" 7 "none" > /dev/null
-
-    # Change log entries
-    change_log "FILE:PROJECTS/${slug}/LONGRUNNER.md#phase.name" "${old_phase}" "${successor}" "owner advanced phase via nightclaw-admin"
-    change_log "FILE:PROJECTS/${slug}/LONGRUNNER.md#phase.status" "COMPLETE" "ACTIVE" "owner advanced phase via nightclaw-admin"
-    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.phase" "${old_phase}" "${successor}" "owner advanced phase via nightclaw-admin"
-    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.status" "$current_status" "ACTIVE" "owner confirmed phase transition via nightclaw-admin"
-    change_log "FILE:ACTIVE-PROJECTS.md#${slug}.escalation_pending" "$old_escalation" "none" "owner cleared escalation via nightclaw-admin"
-    audit_log "TYPE:ADMIN_ADVANCE | RESULT:SUCCESS | PROJECT:$slug | FROM_PHASE:${old_phase} | TO_PHASE:${successor} | PREV_ESCALATION:${old_escalation:0:200}"
-
-    info "Project '$slug' advanced: ${old_phase} → ${successor}. Phase is ACTIVE, worker picks up on next pass."
-}
+# cmd_unblock and cmd_advance removed — phase transitions are now agent-driven.
+# Owner approves via 'done' (sets transition-approved). Worker advances via dispatch ADVANCE path.
+# See phase-transition-redesign-spec.md for details.
 
 cmd_priority() {
     local slug="${1:-}"
@@ -645,6 +522,26 @@ cmd_done() {
     audit_log "TYPE:ADMIN_RESOLVE | RESULT:SUCCESS | FILE:NOTIFICATIONS.md | LINE:$line_num"
 
     info "Notification at line $line_num marked done."
+
+    # Detect phase-transition notifications and set transition-approved
+    if echo "$target_line" | grep -qi "PHASE-TRANSITION\|phase-complete"; then
+        local pt_slug
+        pt_slug=$(echo "$target_line" | grep -oP 'Project:\s*\K[^\s|]+')
+        if [[ -n "$pt_slug" ]]; then
+            local pt_status
+            pt_status=$(get_project_field "$pt_slug" 5 2>/dev/null) || true
+            if [[ "${pt_status^^}" == "TRANSITION-HOLD" ]]; then
+                local old_esc
+                old_esc=$(get_project_field "$pt_slug" 7 2>/dev/null) || old_esc="unknown"
+                update_project_field "$pt_slug" 7 "transition-approved" > /dev/null
+                change_log "FILE:ACTIVE-PROJECTS.md#${pt_slug}.escalation_pending" \
+                    "$old_esc" "transition-approved" \
+                    "owner approved phase transition via nightclaw-admin done"
+                audit_log "TYPE:ADMIN_APPROVE_TRANSITION | RESULT:SUCCESS | PROJECT:$pt_slug"
+                info "Phase transition approved for '$pt_slug'. Worker advances on next pass."
+            fi
+        fi
+    fi
 }
 
 cmd_guide() {
@@ -856,8 +753,7 @@ usage() {
     echo "  decline <slug> [reason]     Decline and delete a draft"
     echo "  pause <slug>                Pause an active project"
     echo "  unpause <slug>              Resume a paused project"
-    echo "  unblock <slug>              Clear a worker-set block"
-    echo "  advance <slug>              Confirm phase transition (from TRANSITION-HOLD)"
+    echo "  ${DIM}# advance and unblock removed — use 'done' for phase transitions${NC}"
     echo "  priority <slug> <n>         Set project priority number"
     echo ""
     echo -e "${BOLD}Communication:${NC}"
@@ -883,8 +779,8 @@ case "$CMD" in
     decline)    cmd_decline "$@" ;;
     pause)      cmd_pause "$@" ;;
     unpause)    cmd_unpause "$@" ;;
-    unblock)    cmd_unblock "$@" ;;
-    advance)    cmd_advance "$@" ;;
+    unblock)    error "'unblock' has been removed. Phase transitions are now agent-driven via 'done'." ;;
+    advance)    error "'advance' has been removed. Use 'nightclaw-admin done <line>' to approve phase transitions." ;;
     priority)   cmd_priority "$@" ;;
     done)       cmd_done "$@" ;;
     guide)      cmd_guide "$@" ;;

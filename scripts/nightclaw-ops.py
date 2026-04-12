@@ -77,6 +77,71 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 
+def check_pa_active(action_class):
+    """Check if a pre-approval with the given action_class is ACTIVE and not expired.
+    Returns True if a matching PA is active, False otherwise.
+    Does NOT evaluate Boundary — that is the worker LLM's responsibility.
+    """
+    content = read_file("orchestration-os/OPS-PREAPPROVAL.md")
+    if content is None:
+        return False
+
+    now = now_utc()
+    # Parse PA entries: ## PA-NNN | Status: ACTIVE | Expires: YYYY-MM-DD
+    pa_pattern = re.compile(
+        r'^## (PA-\d+)\s*\|\s*Status:\s*(\S+)\s*\|\s*Expires:\s*(.+)',
+        re.MULTILINE
+    )
+    action_pattern = re.compile(
+        r'\*\*Action class:\*\*\s*(\S+)',
+        re.MULTILINE
+    )
+
+    # Split into PA blocks
+    blocks = re.split(r'(?=^## PA-\d+)', content, flags=re.MULTILINE)
+    for block in blocks:
+        header = pa_pattern.search(block)
+        if not header:
+            continue
+        pa_id, status, expires_str = header.group(1), header.group(2).upper(), header.group(3).strip()
+        if status != "ACTIVE":
+            continue
+
+        # Check action class
+        action_match = action_pattern.search(block)
+        if not action_match:
+            continue
+        if action_match.group(1).strip() != action_class:
+            continue
+
+        # Check expiry
+        if expires_str in ("—", "-", "~", ""):
+            continue  # No expiry set — treat as inactive
+        try:
+            # Parse date (YYYY-MM-DD) — expires at end of that day
+            exp_date = datetime.strptime(expires_str.split()[0], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            exp_date = exp_date.replace(hour=23, minute=59, second=59)
+            if now <= exp_date:
+                return True
+        except (ValueError, IndexError):
+            continue  # Unparseable expiry — skip
+
+    return False
+
+
+def read_longrunner_successor(slug):
+    """Read phase.successor from a project's LONGRUNNER. Returns empty string if not found."""
+    content = read_file(f"PROJECTS/{slug}/LONGRUNNER.md")
+    if content is None:
+        return ""
+    m = re.search(r'successor:\s*"([^"]+)"', content)
+    if m:
+        val = m.group(1).strip()
+        if val and val != "~":
+            return val
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # integrity-check: T0/T1 SHA256 verification
 # ---------------------------------------------------------------------------
@@ -222,16 +287,62 @@ def cmd_dispatch():
 
         candidates.append((pri, slug, row))
 
-    if not candidates:
-        print("IDLE reason=no_active_dispatchable_projects")
+    if candidates:
+        candidates.sort(key=lambda x: x[0])
+        best = candidates[0]
+        print(f"DISPATCH:{best[1]} priority={best[0]}")
+        # Also list all candidates for context
+        for pri, slug, _ in candidates:
+            print(f"  candidate: {slug} priority={pri}")
         return
 
-    candidates.sort(key=lambda x: x[0])
-    best = candidates[0]
-    print(f"DISPATCH:{best[1]} priority={best[0]}")
-    # Also list all candidates for context
-    for pri, slug, _ in candidates:
-        print(f"  candidate: {slug} priority={pri}")
+    # No ACTIVE candidates. Check for TRANSITION-HOLD projects eligible for advance.
+    advance_candidates = []
+    for row in rows:
+        status = row.get("status", "").strip().upper()
+        esc = row.get("escalation_pending", "").strip().lower()
+        slug = row.get("project_slug", row.get("slug", "")).strip()
+        priority = row.get("priority", "999").strip()
+
+        if status != "TRANSITION-HOLD":
+            continue
+
+        eligible = False
+
+        # Path A: owner explicitly approved via nightclaw-admin done
+        if esc == "transition-approved":
+            eligible = True
+
+        # Path B: PA-001 (phase-auto-transition) is active
+        elif esc.startswith("phase-complete-"):
+            if check_pa_active("phase-auto-transition"):
+                eligible = True
+
+        if not eligible:
+            continue
+
+        # Verify successor exists in LONGRUNNER
+        successor = read_longrunner_successor(slug)
+        if not successor:
+            print(f"SKIP {slug} reason=no_successor_defined")
+            continue
+
+        try:
+            pri = int(priority)
+        except ValueError:
+            pri = 999
+
+        advance_candidates.append((pri, slug, row))
+
+    if advance_candidates:
+        advance_candidates.sort(key=lambda x: x[0])
+        best = advance_candidates[0]
+        print(f"ADVANCE:{best[1]} priority={best[0]}")
+        for pri, slug, _ in advance_candidates:
+            print(f"  candidate: {slug} priority={pri}")
+        return
+
+    print("IDLE reason=no_active_dispatchable_projects")
 
 
 # ---------------------------------------------------------------------------
