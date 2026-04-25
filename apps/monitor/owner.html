@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NightClaw — Owner View</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!--
+  Owner-shaped view of the NightClaw monitor. Target user: project owner,
+  partially technical. Same signed WS contract as nightclaw-monitor.html
+  (connect_required / connect_ack / state_replay / step / notification /
+  bundle_exec_result / command_result), plus two additive RO frame types
+  routed by nightclaw_bridge.runtime._handle_client_frame:
+      { type: 'project_snapshot', project_slug }
+      { type: 'session_replay',   run_id }
+  Both reply with a state_replay-shaped envelope (see _project_snapshot_payload
+  / _session_replay_payload). No new engine behavior, no schema changes.
+
+  Three-column layout:
+    Left   — project picker + status per project (reads ACTIVE-PROJECTS via
+             'active_projects' admin_command, which is already RO allowlisted).
+    Center — "What needs you": pending approvals (approval_chain admin_command)
+             + notifications filtered to priority=user, with inline
+             approve/decline/pause buttons wired to the existing admin verbs.
+    Right  — Timeline: live feed filtered to human-readable events, plus a
+             Live/Pinned toggle and session-replay player (step T0..T9).
+-->
+<style>
+  :root {
+    --bg: #0d0f12; --surface: #14181d; --surface-2: #1a1f26;
+    --border: #262c34; --text: #e6ebf0; --text-dim: #9aa3ad;
+    --text-faint: #5c6470; --accent: #4ea8ff; --accent-dim: #2d6fad;
+    --ok: #4aaf6c; --warn: #e0a650; --err: #d65a5a; --pin: #b87eff;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --text-xs: 11px; --text-sm: 12px; --text-md: 13px; --text-lg: 15px;
+  }
+  [data-theme="light"] {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5;
+    --border: #d6dae0; --text: #1a1f26; --text-dim: #4a5260;
+    --text-faint: #8a919b; --accent: #2a6fc9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  /* Top bar */
+  #topbar {
+    display: grid; grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 12px; align-items: center; padding: 10px 14px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  #topbar .slot { display: flex; gap: 6px; align-items: center; }
+  #topbar label { font-size: var(--text-xs); color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .5px; }
+  #topbar select, #topbar input {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 8px; font-size: var(--text-sm); min-width: 160px;
+  }
+  #pace-row { display: flex; gap: 4px; align-items: center; }
+  .pace-btn {
+    background: var(--surface-2); color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 10px; font-size: var(--text-xs); cursor: pointer;
+  }
+  .pace-btn.active { background: var(--accent-dim); color: #fff; border-color: var(--accent); }
+  #mode-toggle {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 4px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    font-size: var(--text-sm); cursor: pointer;
+  }
+  #mode-toggle.pinned { background: var(--pin); color: #fff; border-color: var(--pin); }
+  #mode-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ok); box-shadow: 0 0 6px var(--ok);
+  }
+  #mode-toggle.pinned #mode-dot { background: #fff; box-shadow: none; }
+  #catchup {
+    display: none; padding: 2px 8px; margin-left: 6px;
+    background: var(--warn); color: #000; border-radius: 10px;
+    font-size: var(--text-xs); cursor: pointer; border: none;
+  }
+  /* Three-column body */
+  #body {
+    display: grid; grid-template-columns: 280px 1fr 360px;
+    gap: 12px; padding: 12px; min-height: calc(100vh - 58px);
+  }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden;
+  }
+  .card-head {
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: var(--text-xs); text-transform: uppercase;
+    letter-spacing: .5px; color: var(--text-dim);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-body { padding: 10px 12px; }
+  /* Project list */
+  .proj-row {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; font-size: var(--text-sm);
+  }
+  .proj-row:last-child { border-bottom: none; }
+  .proj-row:hover { background: var(--surface-2); }
+  .proj-row.selected { background: var(--surface-2); border-left: 3px solid var(--accent); padding-left: 7px; }
+  .proj-slug { font-family: var(--font-mono); }
+  .proj-status {
+    font-size: var(--text-xs); padding: 2px 8px; border-radius: 10px;
+    text-transform: uppercase; letter-spacing: .4px;
+  }
+  .st-active { background: rgba(74, 175, 108, 0.2); color: var(--ok); }
+  .st-paused { background: rgba(224, 166, 80, 0.2); color: var(--warn); }
+  .st-blocked, .st-escalated { background: rgba(214, 90, 90, 0.2); color: var(--err); }
+  .st-complete { background: rgba(154, 163, 173, 0.2); color: var(--text-dim); }
+  /* Phase card */
+  .phase-label { font-size: var(--text-xs); color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .5px; }
+  .phase-val { font-size: var(--text-md); color: var(--text);
+    word-break: break-word; margin-bottom: 8px; }
+  /* Attention center */
+  .attn-item {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .attn-item:last-child { border-bottom: none; }
+  .attn-icon {
+    flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%;
+    margin-top: 6px; background: var(--warn); box-shadow: 0 0 4px var(--warn);
+  }
+  .attn-icon.urgent { background: var(--err); box-shadow: 0 0 4px var(--err); }
+  .attn-body { flex: 1; min-width: 0; }
+  .attn-title { font-size: var(--text-sm); color: var(--text); }
+  .attn-meta { font-size: var(--text-xs); color: var(--text-faint); margin-top: 2px; }
+  .attn-actions { display: flex; gap: 4px; margin-top: 6px; }
+  .btn {
+    font-size: var(--text-xs); padding: 3px 10px; border-radius: 3px;
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    cursor: pointer; font-family: inherit;
+  }
+  .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+  .btn.destructive { background: rgba(214, 90, 90, 0.15); border-color: var(--err); color: var(--err); }
+  .btn:hover:not(:disabled) { filter: brightness(1.15); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  /* Timeline */
+  #timeline { font-family: var(--font-mono); font-size: var(--text-xs);
+    max-height: 360px; overflow-y: auto; }
+  .tl-row { padding: 4px 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px; }
+  .tl-ts { color: var(--text-faint); flex-shrink: 0; }
+  .tl-step { color: var(--accent); flex-shrink: 0; width: 50px; }
+  .tl-msg { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  /* Replay player */
+  #replay-player {
+    display: none; padding: 8px 12px; border-top: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  #replay-player.visible { display: block; }
+  #replay-bar {
+    height: 4px; background: var(--border); border-radius: 2px;
+    margin: 6px 0; position: relative;
+  }
+  #replay-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--pin); border-radius: 2px; transition: width .2s;
+  }
+  #replay-steps { font-family: var(--font-mono); font-size: var(--text-xs);
+    color: var(--text-dim); margin-top: 4px; }
+  /* Empty states */
+  .empty {
+    padding: 18px 12px; font-size: var(--text-sm);
+    color: var(--text-faint); text-align: center; font-style: italic;
+  }
+  /* Data Flow iframe slot, collapsible */
+  #dataflow-wrap {
+    height: 320px; border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  #dataflow-wrap iframe { width: 100%; height: 100%; border: none; display: block; }
+  /* Conn dot */
+  #conn { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-faint); margin-right: 4px; }
+  #conn.connected { background: var(--ok); }
+  #conn.connecting { background: var(--warn); }
+  #conn.disconnected { background: var(--err); }
+  #log {
+    position: fixed; bottom: 0; right: 0; width: 320px; max-height: 100px;
+    overflow-y: auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px 0 0 0; font-family: var(--font-mono);
+    font-size: 10px; padding: 4px 8px; color: var(--text-faint);
+  }
+  .log-warn { color: var(--warn); }
+  .log-err { color: var(--err); }
+</style>
+</head>
+<body data-theme="dark">
+
+<div id="topbar">
+  <div class="slot">
+    <label>Project</label>
+    <select id="sel-project"><option value="">(loading…)</option></select>
+  </div>
+  <div class="slot">
+    <label>Session</label>
+    <select id="sel-session"><option value="">latest</option></select>
+  </div>
+  <div class="slot" id="pace-row">
+    <label>Pace</label>
+    <button class="pace-btn" data-pace="fast">Fast</button>
+    <button class="pace-btn active" data-pace="normal">Normal</button>
+    <button class="pace-btn" data-pace="calm">Calm</button>
+  </div>
+  <div class="slot">
+    <button id="mode-toggle"><span id="mode-dot"></span><span id="mode-label">Live</span></button>
+    <button id="catchup" onclick="_catchUp()">0 new</button>
+    <span style="margin-left:10px;font-size:var(--text-xs)"><span id="conn"></span><span id="conn-text">connecting</span></span>
+  </div>
+</div>
+
+<div id="body">
+  <!-- LEFT: projects -->
+  <div class="col">
+    <div class="card">
+      <div class="card-head">Projects <span id="proj-count" style="color:var(--text-faint)">–</span></div>
+      <div id="proj-list"><div class="empty">(loading projects…)</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">Phase</div>
+      <div class="card-body" id="phase-card">
+        <div class="phase-label">Name</div>
+        <div class="phase-val" id="ph-name">—</div>
+        <div class="phase-label">Status</div>
+        <div class="phase-val" id="ph-status">—</div>
+        <div class="phase-label">Objective</div>
+        <div class="phase-val" id="ph-obj">—</div>
+        <div class="phase-label">Next pass</div>
+        <div class="phase-val" id="ph-next">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: attention -->
+  <div class="col">
+    <div class="card">
+      <div class="card-head">
+        Needs your attention
+        <span id="attn-count" style="color:var(--text-faint)">0</span>
+      </div>
+      <div id="attn-list"><div class="empty">Nothing pending for you.</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        Flow
+        <span style="color:var(--text-faint);font-size:var(--text-xs)">schema ec4f76fd…</span>
+      </div>
+      <div id="dataflow-wrap">
+        <iframe id="dataflow" src="NightClaw-Data-Flow.html"></iframe>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">Bundles (recent)</div>
+      <div id="bundle-list"><div class="empty">No bundles yet.</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: timeline + replay -->
+  <div class="col">
+    <div class="card">
+      <div class="card-head">Timeline</div>
+      <div id="timeline"><div class="empty">(no events)</div></div>
+      <div id="replay-player">
+        <div style="font-size:var(--text-xs);color:var(--text-dim)" id="replay-title">Replay · run —</div>
+        <div id="replay-bar"><div id="replay-fill" style="width:0%"></div></div>
+        <div id="replay-steps">—</div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn" onclick="_replayStep(-1)">◀ prev</button>
+          <button class="btn primary" id="rp-play" onclick="_replayPlay()">▶ play</button>
+          <button class="btn" onclick="_replayStep(1)">next ▶</button>
+          <button class="btn destructive" style="margin-left:auto" onclick="_exitReplay()">exit</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">Change log (recent)</div>
+      <div id="cl-list"><div class="empty">No recent changes.</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Config. Mirrors nightclaw-monitor.html: bridge port via ?port= or
+  // nc_config.json fetched relative to this page.
+  // ---------------------------------------------------------------------------
+  const qs = new URLSearchParams(location.search);
+  const PORT_OVERRIDE = qs.get('port');
+  let bridgeHost = 'localhost';
+  let bridgePort = 9471;
+  let ws = null;
+  let sessionToken = '';
+  let sessionPrivilege = 'ro';
+
+  // UI state
+  const state = {
+    mode: 'live',          // 'live' | 'pinned' | 'replay'
+    selectedProject: '',
+    projects: [],          // from active_projects command
+    sessions: [],          // from state_replay.session_history
+    pendingCount: 0,       // catch-up counter when pinned
+    pace: localStorage.getItem('nc_pace_owner') || 'normal',
+    // replay
+    replayRun: '',
+    replaySteps: [],
+    replayIdx: 0,
+    replayTimer: null,
+  };
+
+  function log(msg, cls) {
+    const el = document.getElementById('log');
+    const d = document.createElement('div');
+    d.textContent = new Date().toLocaleTimeString() + ' · ' + msg;
+    if (cls) d.className = 'log-' + cls;
+    el.appendChild(d);
+    while (el.children.length > 40) el.removeChild(el.firstChild);
+    el.scrollTop = el.scrollHeight;
+  }
+  function setConn(s) {
+    document.getElementById('conn').className = s;
+    document.getElementById('conn-text').textContent = s;
+  }
+  // Escapes & < > " ' so values are safe inside both HTML body and single- or
+  // double-quoted attribute/JS-string contexts. Server-side _slug_ok regex
+  // already rejects quotes, but defense-in-depth keeps this tight if the
+  // frame source ever broadens.
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+  // ---------------------------------------------------------------------------
+  // Pacing buffer — same shape as the main monitor's but owner-local, so the
+  // two pages don't fight over localStorage semantics.
+  // ---------------------------------------------------------------------------
+  const PACE_MS = { fast: 0, normal: 500, calm: 2000 };
+  const PASSTHROUGH = new Set([
+    'state_replay', 'project_snapshot', 'session_replay',
+    'sessions_snapshot', 'command_result', 'connect_required',
+    'connect_ack', 'bridge_shutdown', 'scr_verify_result',
+  ]);
+  let _buf = [], _bufTimer = null;
+  function flushBuf() {
+    if (_bufTimer) { clearTimeout(_bufTimer); _bufTimer = null; }
+    const q = _buf; _buf = [];
+    for (const m of q) dispatch(m);
+  }
+  function paced(msg) {
+    // Pinned/replay: swallow incoming live events into a catch-up counter.
+    if (state.mode !== 'live') {
+      const et = msg && msg.event_type;
+      // Structural replies we explicitly requested (project_snapshot /
+      // session_replay / command_result for active_projects etc.) still land.
+      if (PASSTHROUGH.has(et)) { dispatch(msg); return; }
+      state.pendingCount++;
+      const cu = document.getElementById('catchup');
+      cu.style.display = 'inline-block';
+      cu.textContent = state.pendingCount + ' new';
+      return;
+    }
+    const ms = PACE_MS[state.pace] || 0;
+    const et = msg && msg.event_type;
+    if (ms === 0 || (et && PASSTHROUGH.has(et))) {
+      flushBuf(); dispatch(msg); return;
+    }
+    _buf.push(msg);
+    if (!_bufTimer) _bufTimer = setTimeout(flushBuf, ms);
+  }
+
+  // ---------------------------------------------------------------------------
+  // WS connection.
+  // ---------------------------------------------------------------------------
+  async function loadConfig() {
+    if (PORT_OVERRIDE) { bridgePort = parseInt(PORT_OVERRIDE, 10); return; }
+    try {
+      const r = await fetch('nc_config.json');
+      if (r.ok) {
+        const c = await r.json();
+        if (c.bridge_host) bridgeHost = c.bridge_host;
+        if (c.bridge_port) bridgePort = c.bridge_port;
+      }
+    } catch (e) { /* keep defaults */ }
+  }
+  function connect() {
+    setConn('connecting');
+    ws = new WebSocket(`ws://${bridgeHost}:${bridgePort}/ws`);
+    ws.onopen = () => { setConn('connected'); log('ws open'); };
+    ws.onclose = () => { setConn('disconnected'); log('ws closed', 'warn');
+      setTimeout(connect, 2000); };
+    ws.onerror = () => { setConn('disconnected'); };
+    ws.onmessage = (ev) => {
+      try { paced(JSON.parse(ev.data)); }
+      catch (e) { log('parse err: '+e, 'err'); }
+    };
+  }
+  function wsSend(obj) {
+    if (!ws || ws.readyState !== 1) return false;
+    ws.send(JSON.stringify(obj)); return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dispatch — consumes state_replay / project_snapshot / session_replay
+  // envelopes (same shape) plus streaming step / notification / bundle /
+  // audit_tail / command_result events.
+  // ---------------------------------------------------------------------------
+  function dispatch(ev) {
+    const et = ev.event_type;
+    if (et === 'connect_required') {
+      wsSend({ type: 'connect', token: sessionToken || 'owner-ro' });
+      return;
+    }
+    if (et === 'connect_ack') {
+      sessionPrivilege = ev.privilege || 'ro';
+      // Kick off initial project list.
+      wsSend({ type: 'admin_command', cmd: 'active_projects', args: {} });
+      return;
+    }
+    if (et === 'state_replay' || et === 'project_snapshot' || et === 'session_replay') {
+      applyEnvelope(ev);
+      return;
+    }
+    if (et === 'step') {
+      if (ev.step) timelineRow(ev.ts, ev.step, ev.cmd || '');
+      return;
+    }
+    if (et === 'bundle_exec_result') {
+      prependBundle(ev);
+      timelineRow(ev.ts, 'bundle', `${ev.bundle_name} ${ev.ok ? 'ok' : 'FAIL'}`);
+      return;
+    }
+    if (et === 'notification') {
+      // In owner view, notifications are sorted into the attention pane by
+      // applyEnvelope; the streaming channel just appends to the timeline.
+      timelineRow(ev.ts, 'notif', ev.message || '');
+      return;
+    }
+    if (et === 'audit_tail') {
+      if (ev.severity && ev.severity.toLowerCase().startsWith('warn'))
+        timelineRow(ev.ts, 'audit', ev.line || '');
+      return;
+    }
+    if (et === 'command_result') {
+      handleCommandResult(ev);
+      return;
+    }
+    if (et === 'bridge_shutdown') {
+      log('bridge_shutdown', 'warn');
+      return;
+    }
+  }
+
+  function applyEnvelope(ev) {
+    // Session list (for session picker) — only update when live.
+    if (ev.session_history && state.mode === 'live') {
+      state.sessions = ev.session_history;
+      renderSessionPicker();
+    }
+    // Longrunner card
+    if (ev.longrunner) renderPhase(ev.longrunner);
+    // Change log
+    if (ev.change_log) renderChangeLog(ev.change_log);
+    // Bundles
+    if (ev.bundle_history) renderBundles(ev.bundle_history);
+    // Notifications → attention
+    if (ev.notifications) renderAttention(ev.notifications);
+    // Step history → data-flow highlight + timeline backfill
+    if (ev.step_history && ev.step_history.length) {
+      for (const s of ev.step_history.slice(-20))
+        timelineRow(s.ts, s.step, s.cmd || '');
+      highlightFlow(ev.step_history[ev.step_history.length - 1].step);
+    }
+    // Replay-specific UI affordance
+    if (ev.event_type === 'session_replay') {
+      state.replayRun = ev.run_id || '';
+      state.replaySteps = ev.step_history || [];
+      state.replayIdx = Math.max(0, state.replaySteps.length - 1);
+      showReplayPlayer();
+      renderReplayFrame();
+    }
+  }
+
+  function handleCommandResult(ev) {
+    if (ev.cmd === 'active_projects' && ev.ok) {
+      const rows = parseActiveProjects(ev.output || '');
+      state.projects = rows;
+      renderProjectList();
+      if (!state.selectedProject && rows.length) selectProject(rows[0].slug);
+    } else if (ev.cmd === 'approval_chain' && ev.ok && Array.isArray(ev.data)) {
+      mergeApprovalChain(ev.data);
+    } else if (ev.cmd === 'approve' || ev.cmd === 'decline' || ev.cmd === 'pause' || ev.cmd === 'unpause') {
+      log(`${ev.cmd} → ${ev.ok ? 'ok' : 'FAIL'}`, ev.ok ? null : 'err');
+      // Refresh project list so status chips reflect reality.
+      wsSend({ type: 'admin_command', cmd: 'active_projects', args: {} });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Active projects — the `active_projects` admin verb shells out to
+  // scripts/nightclaw-admin.sh which prints the ACTIVE-PROJECTS.md table.
+  // We parse the text output rather than add a new JSON endpoint; the format
+  // is a pipe-delimited table (priority|slug|path|phase|status|last_pass|esc).
+  // ---------------------------------------------------------------------------
+  function parseActiveProjects(text) {
+    const rows = [];
+    for (const line of text.split('\n')) {
+      const t = line.trim();
+      if (!t || t.startsWith('#') || t.startsWith('---')) continue;
+      if (!t.includes('|')) continue;
+      const cells = t.split('|').map(s => s.trim());
+      if (cells.length < 5) continue;
+      if (cells[0].toLowerCase() === 'priority') continue;
+      rows.push({
+        priority: cells[0], slug: cells[1], path: cells[2],
+        phase: cells[3], status: (cells[4] || '').toLowerCase(),
+        last_pass: cells[5] || '', escalation: cells[6] || '',
+      });
+    }
+    return rows;
+  }
+
+  function renderProjectList() {
+    const el = document.getElementById('proj-list');
+    document.getElementById('proj-count').textContent = state.projects.length;
+    if (!state.projects.length) {
+      el.innerHTML = '<div class="empty">No active projects.</div>'; return;
+    }
+    el.innerHTML = state.projects.map(p => `
+      <div class="proj-row ${p.slug === state.selectedProject ? 'selected' : ''}"
+           onclick="selectProject('${esc(p.slug)}')">
+        <div>
+          <div class="proj-slug">${esc(p.slug)}</div>
+          <div style="font-size:var(--text-xs);color:var(--text-faint)">${esc(p.phase || '')}</div>
+        </div>
+        <div class="proj-status st-${esc(p.status)}">${esc(p.status)}</div>
+      </div>`).join('');
+    // Top-bar project picker
+    const sel = document.getElementById('sel-project');
+    sel.innerHTML = state.projects.map(p =>
+      `<option value="${esc(p.slug)}" ${p.slug === state.selectedProject ? 'selected' : ''}>
+        ${esc(p.slug)} (${esc(p.status)})</option>`).join('');
+  }
+
+  function renderSessionPicker() {
+    const sel = document.getElementById('sel-session');
+    const scoped = state.sessions.filter(s =>
+      !state.selectedProject || !s.project_slug || s.project_slug === state.selectedProject);
+    sel.innerHTML = '<option value="">latest (live)</option>' +
+      scoped.slice(-30).reverse().map(s =>
+        `<option value="${esc(s.run_id)}">${esc(s.run_id)} · ${esc(s.outcome || 'running')}</option>`
+      ).join('');
+  }
+
+  function selectProject(slug) {
+    state.selectedProject = slug;
+    document.getElementById('sel-project').value = slug;
+    renderProjectList();
+    renderSessionPicker();
+    // Request scoped snapshot (does not affect mode; if live, keep live.)
+    wsSend({ type: 'project_snapshot', project_slug: slug });
+    // Also pull pending approvals.
+    wsSend({ type: 'admin_command', cmd: 'approval_chain', args: {} });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase / change-log / bundles renderers — small subset of the full monitor.
+  // ---------------------------------------------------------------------------
+  function renderPhase(lr) {
+    document.getElementById('ph-name').textContent = lr.phase_name || '—';
+    document.getElementById('ph-status').textContent = lr.phase_status || '—';
+    document.getElementById('ph-obj').textContent = lr.phase_objective || '—';
+    document.getElementById('ph-next').textContent = lr.next_pass || '—';
+  }
+  function renderChangeLog(rows) {
+    const el = document.getElementById('cl-list');
+    if (!rows.length) { el.innerHTML = '<div class="empty">No recent changes.</div>'; return; }
+    el.innerHTML = rows.slice(-15).reverse().map(r => `
+      <div style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:var(--text-xs)">
+        <div style="color:var(--text-faint);font-family:var(--font-mono)">${esc(r.ts || '')}</div>
+        <div>${esc(r.field || '')}: <span style="color:var(--err)">${esc((r.old_val || '').slice(0,40))}</span>
+          → <span style="color:var(--ok)">${esc((r.new_val || '').slice(0,40))}</span></div>
+      </div>`).join('');
+  }
+  function renderBundles(rows) {
+    const el = document.getElementById('bundle-list');
+    if (!rows.length) { el.innerHTML = '<div class="empty">No bundles yet.</div>'; return; }
+    el.innerHTML = rows.slice(-10).reverse().map(b => `
+      <div style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:var(--text-sm);
+                   display:flex;justify-content:space-between">
+        <span style="font-family:var(--font-mono)">${esc(b.bundle_name || '')}</span>
+        <span class="proj-status ${b.ok ? 'st-active' : 'st-blocked'}">${b.ok ? 'ok' : 'fail'}</span>
+      </div>`).join('');
+  }
+  function prependBundle(b) {
+    const el = document.getElementById('bundle-list');
+    if (el.querySelector('.empty')) el.innerHTML = '';
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:6px 12px;border-bottom:1px solid var(--border);font-size:var(--text-sm);display:flex;justify-content:space-between';
+    row.innerHTML = `<span style="font-family:var(--font-mono)">${esc(b.bundle_name || '')}</span>
+      <span class="proj-status ${b.ok ? 'st-active' : 'st-blocked'}">${b.ok ? 'ok' : 'fail'}</span>`;
+    el.insertBefore(row, el.firstChild);
+    while (el.children.length > 10) el.removeChild(el.lastChild);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Attention center — merge notifications tagged as user-action with pending
+  // approvals from approval_chain. Action buttons invoke the existing admin
+  // verbs (approve/decline/pause/unpause); no new engine surface.
+  // ---------------------------------------------------------------------------
+  let _attnNotifs = [];
+  let _attnApprovals = [];
+  function renderAttention(notifs) {
+    // Filter to items actually needing user action — priority contains
+    // 'approval' or 'user' or 'blocked', or status is 'waiting'.
+    _attnNotifs = (notifs || []).filter(n => {
+      const p = (n.priority || '').toLowerCase();
+      const s = (n.status || '').toLowerCase();
+      return p.includes('approval') || p.includes('user') || p.includes('blocked')
+          || s === 'waiting' || s === 'pending';
+    });
+    drawAttention();
+  }
+  function mergeApprovalChain(rows) {
+    // Pending approvals only.
+    _attnApprovals = rows.filter(r => (r.result || '').toLowerCase() === 'pending');
+    drawAttention();
+  }
+  function drawAttention() {
+    const items = [
+      ..._attnApprovals.map(a => ({
+        kind: 'approval', urgent: true,
+        title: `Approval needed · ${a.pa_id || ''}`,
+        meta: `${a.ts || ''} · ${(a.action || '').slice(0, 80)}`,
+        slug: a.slug || state.selectedProject,
+      })),
+      ..._attnNotifs.map(n => ({
+        kind: 'notif', urgent: (n.priority || '').toLowerCase().includes('urgent'),
+        title: n.message || '(notification)',
+        meta: `${n.ts || ''} · ${n.project || ''}`,
+        slug: n.project || state.selectedProject,
+      })),
+    ];
+    document.getElementById('attn-count').textContent = items.length;
+    const el = document.getElementById('attn-list');
+    if (!items.length) {
+      el.innerHTML = '<div class="empty">Nothing pending for you.</div>'; return;
+    }
+    el.innerHTML = items.map((it, i) => `
+      <div class="attn-item">
+        <div class="attn-icon ${it.urgent ? 'urgent' : ''}"></div>
+        <div class="attn-body">
+          <div class="attn-title">${esc(it.title)}</div>
+          <div class="attn-meta">${esc(it.meta)}</div>
+          <div class="attn-actions">
+            <button class="btn primary" onclick="attnAct(${i}, 'approve')">approve</button>
+            <button class="btn destructive" onclick="attnAct(${i}, 'decline')">decline</button>
+            <button class="btn" onclick="attnAct(${i}, 'pause')">pause</button>
+          </div>
+        </div>
+      </div>`).join('');
+    window._attnItems = items;
+  }
+  window.attnAct = function (idx, verb) {
+    const it = window._attnItems && window._attnItems[idx];
+    if (!it || !it.slug) { log('no slug for action', 'warn'); return; }
+    if (sessionPrivilege !== 'rw') {
+      log('need RW token to ' + verb, 'warn');
+      return;
+    }
+    wsSend({ type: 'admin_command', cmd: verb, args: { slug: it.slug } });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Timeline — right column feed. Only human-readable events land here; raw
+  // T-step emissions with no cmd are collapsed into a single row per step.
+  // ---------------------------------------------------------------------------
+  let _lastTL = '';
+  function timelineRow(ts, step, msg) {
+    const key = (ts || '') + '|' + (step || '') + '|' + (msg || '');
+    if (key === _lastTL) return;
+    _lastTL = key;
+    const el = document.getElementById('timeline');
+    if (el.querySelector('.empty')) el.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'tl-row';
+    row.innerHTML = `<span class="tl-ts">${esc((ts || '').slice(11, 19) || '—')}</span>
+      <span class="tl-step">${esc(step || '')}</span>
+      <span class="tl-msg">${esc(msg || '')}</span>`;
+    el.insertBefore(row, el.firstChild);
+    while (el.children.length > 100) el.removeChild(el.lastChild);
+    // Light the flow
+    if (step && /^T\d/.test(step)) highlightFlow(step);
+  }
+  function highlightFlow(step) {
+    const f = document.getElementById('dataflow');
+    if (!f || !f.contentWindow) return;
+    try { f.contentWindow.postMessage({ type: 'nc-highlight', step }, '*'); } catch (e) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Live / Pinned / Replay mode toggle.
+  // ---------------------------------------------------------------------------
+  document.getElementById('mode-toggle').addEventListener('click', () => {
+    if (state.mode === 'live') setMode('pinned');
+    else if (state.mode === 'pinned') setMode('live');
+    // Replay mode exits via its own button.
+  });
+  function setMode(m) {
+    state.mode = m;
+    const btn = document.getElementById('mode-toggle');
+    const lbl = document.getElementById('mode-label');
+    btn.classList.toggle('pinned', m !== 'live');
+    lbl.textContent = m === 'live' ? 'Live' : (m === 'pinned' ? 'Pinned' : 'Replay');
+    if (m === 'live') {
+      state.pendingCount = 0;
+      document.getElementById('catchup').style.display = 'none';
+    }
+  }
+  function _catchUp() {
+    state.pendingCount = 0;
+    document.getElementById('catchup').style.display = 'none';
+    setMode('live');
+    // Pull a fresh scoped snapshot to reconcile.
+    if (state.selectedProject)
+      wsSend({ type: 'project_snapshot', project_slug: state.selectedProject });
+  }
+  window._catchUp = _catchUp;
+
+  // ---------------------------------------------------------------------------
+  // Session picker — empty string means live latest; otherwise replay.
+  // ---------------------------------------------------------------------------
+  document.getElementById('sel-project').addEventListener('change', e => {
+    selectProject(e.target.value);
+  });
+  document.getElementById('sel-session').addEventListener('change', e => {
+    const rid = e.target.value;
+    if (!rid) { _exitReplay(); return; }
+    setMode('replay');
+    wsSend({ type: 'session_replay', run_id: rid });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Replay player — walks the reconstructed step_history one tick at a time,
+  // re-posting nc-highlight to the Data Flow iframe for each step. The bridge
+  // has already shipped a frozen state_replay; we just animate the highlight.
+  // ---------------------------------------------------------------------------
+  function showReplayPlayer() {
+    document.getElementById('replay-player').classList.add('visible');
+    document.getElementById('replay-title').textContent = 'Replay · run ' + state.replayRun;
+  }
+  function _exitReplay() {
+    if (state.replayTimer) { clearInterval(state.replayTimer); state.replayTimer = null; }
+    document.getElementById('replay-player').classList.remove('visible');
+    document.getElementById('sel-session').value = '';
+    setMode('live');
+    if (state.selectedProject)
+      wsSend({ type: 'project_snapshot', project_slug: state.selectedProject });
+  }
+  window._exitReplay = _exitReplay;
+  function _replayStep(delta) {
+    if (state.replayTimer) { clearInterval(state.replayTimer); state.replayTimer = null; }
+    state.replayIdx = Math.max(0, Math.min(state.replaySteps.length - 1,
+      state.replayIdx + delta));
+    renderReplayFrame();
+  }
+  window._replayStep = _replayStep;
+  function _replayPlay() {
+    if (state.replayTimer) {
+      clearInterval(state.replayTimer); state.replayTimer = null;
+      document.getElementById('rp-play').textContent = '▶ play'; return;
+    }
+    document.getElementById('rp-play').textContent = '⏸ pause';
+    state.replayTimer = setInterval(() => {
+      if (state.replayIdx >= state.replaySteps.length - 1) {
+        clearInterval(state.replayTimer); state.replayTimer = null;
+        document.getElementById('rp-play').textContent = '▶ play'; return;
+      }
+      state.replayIdx++;
+      renderReplayFrame();
+    }, 700);
+  }
+  window._replayPlay = _replayPlay;
+  function renderReplayFrame() {
+    const s = state.replaySteps[state.replayIdx];
+    if (!s) return;
+    const pct = state.replaySteps.length <= 1 ? 100 :
+      Math.round(100 * state.replayIdx / (state.replaySteps.length - 1));
+    document.getElementById('replay-fill').style.width = pct + '%';
+    document.getElementById('replay-steps').textContent =
+      `${state.replayIdx + 1}/${state.replaySteps.length} · ${s.step} · ${s.ts || ''}`;
+    highlightFlow(s.step);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pace selector buttons.
+  // ---------------------------------------------------------------------------
+  document.querySelectorAll('.pace-btn').forEach(btn => {
+    if (btn.dataset.pace === state.pace) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pace-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.pace = btn.dataset.pace;
+      localStorage.setItem('nc_pace_owner', state.pace);
+    });
+  });
+
+  // Tell the data-flow iframe which theme we're using so it matches.
+  window.addEventListener('load', () => {
+    const f = document.getElementById('dataflow');
+    if (!f) return;
+    f.addEventListener('load', () => {
+      try { f.contentWindow.postMessage({ type: 'nc-theme', theme: 'dark' }, '*'); }
+      catch (e) {}
+    });
+  });
+
+  // Go.
+  loadConfig().then(connect);
+</script>
+</body>
+</html>

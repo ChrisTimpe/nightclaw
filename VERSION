@@ -1,0 +1,20 @@
+2026.4.23 | 2026-04-23 | nightclaw-2026.4.23-release
+
+Check: cat {WORKSPACE_ROOT}/VERSION
+
+Changelog:
+  2026.4.16 — CalVer adoption + architecture demo restore + full naming
+              sweep. NightClaw now uses YYYY.M.D calendar versioning matching
+              OpenClaw and NemoClaw. All prior vX.Y.Z releases retroactively
+              tagged with their release dates (2026.4.7, 2026.4.10, 2026.4.11,
+              2026.4.12, 2026.4.14). The 2026.4.14 CHANGELOG entry (formerly
+              v0.3.0) corrected to document PR #7, #9, #10, #11 code fixes.
+              Architecture demo GIF restored at assets/ and embedded in README.
+              Every file swept to the new naming scheme — protected file
+              banners updated; non-protected references updated; UPGRADING.md
+              rewritten for CalVer; historical fix-attributions preserved.
+              Integrity manifest SHA-256 column BLANKED for all 11 protected
+              files — every install and every upgrade to 2026.4.16 must
+              re-sign. No orchestration logic, bundle, or governance contract
+              changed. See CHANGELOG.md, CONTRIBUTING.md § Versioning, and
+              UPGRADING.md § Protected File Changes.

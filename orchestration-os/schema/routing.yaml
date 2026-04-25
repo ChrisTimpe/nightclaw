@@ -1,0 +1,131 @@
+# R3 — WRITE ROUTING
+# File → tier → bundle. Sole authority for "how does a write to this file happen?"
+# Tiers: APPEND | STANDARD | PROTECTED | MANIFEST-VERIFY | CODE
+# CODE tier: source files change-gated by the test suite, not by bundles. Added in Pass 5
+# for the four Python packages (nightclaw_engine, nightclaw_bridge, nightclaw_monitor,
+# nightclaw_ops) and apps/monitor UI assets. bundle="-" always for CODE.
+# Sourced from orchestration-os/REGISTRY.md R3 (pre-Merge-1 content).
+
+routes:
+  - { file: "ACTIVE-PROJECTS.md(update)",                   tier: STANDARD,        bundle: "BUNDLE:longrunner_update",   note: "T6 state sync after pass" }
+  - { file: "ACTIVE-PROJECTS.md(block)",                    tier: STANDARD,        bundle: "BUNDLE:route_block",         note: "T2/T2.7/T3 blocking" }
+  - { file: "ACTIVE-PROJECTS.md(transition)",               tier: STANDARD,        bundle: "BUNDLE:phase_transition",    note: "Phase complete" }
+  - { file: "ACTIVE-PROJECTS.md(advance)",                  tier: STANDARD,        bundle: "BUNDLE:phase_advance",       note: "Phase advance to successor" }
+  - { file: "ACTIVE-PROJECTS.md(escalation)",               tier: STANDARD,        bundle: "BUNDLE:surface_escalation",  note: "Surfacing to {OWNER}" }
+  - { file: "ACTIVE-PROJECTS.md",                           tier: STANDARD,        bundle: "standalone",                 note: "Canonical bare name; see suffixed rows above for bundle-specific routing" }
+  - { file: "PROJECTS/*/LONGRUNNER.md",                     tier: STANDARD,        bundle: "BUNDLE:longrunner_update",   note: "Always via bundle, never raw" }
+  - { file: "PROJECTS/*/LONGRUNNER-DRAFT.md",               tier: STANDARD,        bundle: "standalone",                 note: "Worker idle-cycle Tier 4 writes; manager T3.5 reads; {OWNER} renames to LONGRUNNER.md on approval" }
+  - { file: "PROJECTS/*/outputs/*",                         tier: STANDARD,        bundle: "standalone",                 note: "T4 only. NEVER overwrite files from a prior phase — use phase-namespaced filenames. Prior phase outputs are audit artifacts." }
+  - { file: "NOTIFICATIONS.md(append)",                     tier: APPEND,          bundle: "standalone",                 note: "Manager appends at STARTUP/T0/T2/T3.5/T4/T8; worker via BUNDLE:surface_escalation" }
+  - { file: "NOTIFICATIONS.md(prune)",                      tier: STANDARD,        bundle: "standalone",                 note: "Manager T8.3 only — move resolved/stale entries to archive" }
+  - { file: "NOTIFICATIONS.md",                             tier: APPEND,          bundle: "standalone",                 note: "Canonical bare name; see suffixed rows above for bundle-specific routing" }
+  - { file: "NOTIFICATIONS-ARCHIVE.md",                     tier: APPEND,          bundle: "standalone",                 note: "Manager T8.3 only — receives pruned entries verbatim" }
+  - { file: "audit/AUDIT-LOG.md",                           tier: APPEND,          bundle: "inline",                     note: "Every step writes its own entry" }
+  - { file: "audit/SESSION-REGISTRY.md",                    tier: APPEND,          bundle: "BUNDLE:session_close",       note: "T9 only" }
+  - { file: "audit/CHANGE-LOG.md",                          tier: APPEND,          bundle: "inline",                     note: "Immediately after each field change in T4" }
+  - { file: "audit/APPROVAL-CHAIN.md",                      tier: APPEND,          bundle: "BUNDLE:pa_invoke",           note: "T2.7 only" }
+  - { file: "audit/INTEGRITY-MANIFEST.md",                  tier: MANIFEST-VERIFY, bundle: "BUNDLE:manifest_verify",     note: "Manager: timestamps only. {OWNER}: hashes." }
+  - { file: "memory/YYYY-MM-DD.md",                         tier: APPEND,          bundle: "BUNDLE:session_close,inline", note: "T9 via bundle; manager T3/T3.5 inline one-liners; worker idle-cycle inline" }
+  - { file: "memory/README.md",                             tier: STANDARD,        bundle: "standalone",                 note: "Explains empty fresh-template daily-log directory versus protected MEMORY.md." }
+  - { file: "PROJECTS/MANAGER-REVIEW-REGISTRY.md",          tier: STANDARD,        bundle: "standalone",                 note: "Manager T7 only" }
+  - { file: "orchestration-os/OPS-TOOL-REGISTRY.md",        tier: STANDARD,        bundle: "standalone",                 note: "Worker T7a only" }
+  - { file: "AGENTS.md",                                    tier: STANDARD,        bundle: "standalone",                 note: "Navigation index — auto-injected by OpenClaw. {OWNER} edits only. Do not write behavioral content here." }
+  - { file: "MODEL-TIERS.md",                               tier: STANDARD,        bundle: "standalone",                 note: "{OWNER} edits only. Never written by the agent. Read by set-model-tier at T9 to resolve model ID for next session." }
+  - { file: "AGENTS-CORE.md",                               tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Contains session contracts and behavioral rules. Re-sign after any edit." }
+  - { file: "AGENTS-LESSONS.md",                            tier: APPEND,          bundle: "standalone",                 note: "Worker T7d only — append behavior lessons. Never overwrite." }
+  - { file: "LOCK.md",                                      tier: STANDARD,        bundle: "standalone",                 note: "Worker/manager STARTUP (write) and BUNDLE:session_close (release). Overwrite-in-place only." }
+  - { file: "orchestration-os/REGISTRY.md(append)",         tier: STANDARD,        bundle: "standalone",                 note: "Worker T7f — append new rows only. Never modify existing rows, never delete." }
+  - { file: "orchestration-os/REGISTRY.md(structural)",     tier: PROTECTED,       bundle: "none",                       note: "Any modification to existing rows, deletion, or section restructuring. {OWNER} only. Re-sign after." }
+  - { file: "orchestration-os/OPS-FAILURE-MODES.md",        tier: STANDARD,        bundle: "standalone",                 note: "Worker T7c — NEVER delete entries" }
+  - { file: "orchestration-os/OPS-QUALITY-STANDARD.md",     tier: STANDARD,        bundle: "standalone",                 note: "Worker T7e" }
+  - { file: "orchestration-os/OPS-KNOWLEDGE-EXECUTION.md",  tier: STANDARD,        bundle: "standalone",                 note: "Worker T7b" }
+  - { file: "SOUL.md",                                      tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Six-frame review." }
+  - { file: "USER.md",                                      tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only." }
+  - { file: "IDENTITY.md",                                  tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only." }
+  - { file: "MEMORY.md",                                    tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only." }
+  - { file: "orchestration-os/CRON-WORKER-PROMPT.md",       tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Re-sign after." }
+  - { file: "orchestration-os/CRON-MANAGER-PROMPT.md",      tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Re-sign after." }
+  - { file: "orchestration-os/OPS-PREAPPROVAL.md",          tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Re-sign after." }
+  - { file: "orchestration-os/OPS-AUTONOMOUS-SAFETY.md",    tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Re-sign after." }
+  - { file: "orchestration-os/CRON-HARDLINES.md",           tier: PROTECTED,       bundle: "none",                       note: "{OWNER} only. Re-sign after." }
+
+  # --- CODE tier (Pass 5) — source files; change-gated by tests, not bundles ---
+  # nightclaw_engine/ — the deterministic executor (22 files after Pass 8 _legacy retirement)
+  - { file: "nightclaw_engine/__init__.py",                 tier: CODE,            bundle: "-",                          note: "Package marker; re-exports COMMANDS + main from commands/" }
+  - { file: "nightclaw_engine/commands/__init__.py",        tier: CODE,            bundle: "-",                          note: "COMMANDS table + STEP_CMD_MAP + main() dispatcher (Pass 6)" }
+  - { file: "nightclaw_engine/commands/_shared.py",         tier: CODE,            bundle: "-",                          note: "ROOT singleton, PROTECTED_PATHS, APPEND_ALLOWED, YAML/LONGRUNNER helpers (Pass 6)" }
+  - { file: "nightclaw_engine/commands/append.py",          tier: CODE,            bundle: "-",                          note: "append + append-batch (Pass 6)" }
+  - { file: "nightclaw_engine/commands/audit.py",           tier: CODE,            bundle: "-",                          note: "audit-spine, audit-anomalies, crash-*, timing-check, change-detect, transition-expiry, prune-candidates, t7-dedup (Pass 6)" }
+  - { file: "nightclaw_engine/commands/bootstrap.py",       tier: CODE,            bundle: "-",                          note: "bootstrap — LLM onboarding projection via declarative tracks + resolver registry (Pass 10)" }
+  - { file: "nightclaw_engine/commands/model_tier.py",      tier: CODE,            bundle: "-",                          note: "set-model-tier — platform model switching via MODEL-TIERS.md at T9.5 (Pass 11)" }
+  - { file: "nightclaw_engine/commands/bundle.py",          tier: CODE,            bundle: "-",                          note: "bundle-exec, validate-bundles, schema-render, schema-lint (Pass 6)" }
+  - { file: "nightclaw_engine/commands/bundle_mutators.py", tier: CODE,            bundle: "-",                          note: "per-target mutators (longrunner/dispatch/manifest/lock) + do_append; split from bundle.py for ≤700 LOC ceiling (Pass 6)" }
+  - { file: "nightclaw_engine/commands/dispatch.py",        tier: CODE,            bundle: "-",                          note: "dispatch, dispatch-validate, scan-notifications, idle-triage (Pass 6)" }
+  - { file: "nightclaw_engine/commands/integrity.py",       tier: CODE,            bundle: "-",                          note: "integrity-check SHA256 manifest verifier (Pass 6)" }
+  - { file: "nightclaw_engine/commands/lock.py",            tier: CODE,            bundle: "-",                          note: "lock-acquire, lock-release, next-run-id (Pass 6)" }
+  - { file: "nightclaw_engine/commands/longrunner.py",      tier: CODE,            bundle: "-",                          note: "longrunner-extract, longrunner-render, phase-validate (Pass 6)" }
+  - { file: "nightclaw_engine/commands/scr.py",             tier: CODE,            bundle: "-",                          note: "scr-verify thin driver; predicates live in protocol/integrity.py (Pass 6)" }
+  - { file: "nightclaw_engine/commands/validate.py",        tier: CODE,            bundle: "-",                          note: "validate-field, registry-route, cascade-read, strategic-context (Pass 6)" }
+  - { file: "nightclaw_engine/engine/__init__.py",          tier: CODE,            bundle: "-",                          note: "Exports gates, longrunner, render" }
+  - { file: "nightclaw_engine/engine/gates.py",             tier: CODE,            bundle: "-",                          note: "Pure-function R2/R3/R4/CL5 validators" }
+  - { file: "nightclaw_engine/engine/longrunner.py",        tier: CODE,            bundle: "-",                          note: "LONGRUNNER field extraction and rendering" }
+  - { file: "nightclaw_engine/engine/render.py",            tier: CODE,            bundle: "-",                          note: "Deterministic REGISTRY.generated.md renderer" }
+  - { file: "nightclaw_engine/mutators/__init__.py",        tier: CODE,            bundle: "-",                          note: "Mutator entry points (call gates before writes)" }
+  - { file: "nightclaw_engine/protocol/__init__.py",        tier: CODE,            bundle: "-",                          note: "Protocol package marker" }
+  - { file: "nightclaw_engine/protocol/integrity.py",       tier: CODE,            bundle: "-",                          note: "SCR predicate registry + implementations" }
+  - { file: "nightclaw_engine/schema/__init__.py",          tier: CODE,            bundle: "-",                          note: "Exports SchemaModel, Phase, PhaseMachine, loaders" }
+  - { file: "nightclaw_engine/schema/loader.py",            tier: CODE,            bundle: "-",                          note: "Tier-A YAML loader; SchemaModel dataclass + fingerprint" }
+  - { file: "nightclaw_engine/schema/phases.py",            tier: CODE,            bundle: "-",                          note: "Tier-C per-project phase machine loader" }
+
+  # nightclaw_bridge/ — telemetry server (12 files)
+  - { file: "nightclaw_bridge/__init__.py",                 tier: CODE,            bundle: "-",                          note: "Package marker" }
+  - { file: "nightclaw_bridge/__main__.py",                 tier: CODE,            bundle: "-",                          note: "python -m nightclaw_bridge entry shim" }
+  - { file: "nightclaw_bridge/client_handlers.py",          tier: CODE,            bundle: "-",                          note: "WebSocket client dispatch" }
+  - { file: "nightclaw_bridge/config.py",                   tier: CODE,            bundle: "-",                          note: "Bridge config loader (ports, socket path)" }
+  - { file: "nightclaw_bridge/main.py",                     tier: CODE,            bundle: "-",                          note: "build_server factory + optional --serve CLI" }
+  - { file: "nightclaw_bridge/protocol.py",                 tier: CODE,            bundle: "-",                          note: "ALLOWED_TIERS + is_opsstepevent validator" }
+  - { file: "nightclaw_bridge/repository.py",               tier: CODE,            bundle: "-",                          note: "FileSessionRepository + MemorySessionRepository" }
+  - { file: "nightclaw_bridge/runtime.py",                  tier: CODE,            bundle: "-",                          note: "Optional LocalRuntime: HTTP+WS fan-out + admin allowlist" }
+  - { file: "nightclaw_bridge/server.py",                   tier: CODE,            bundle: "-",                          note: "BridgeServer: handle_ops_ingest, broadcast, snapshot" }
+  - { file: "nightclaw_bridge/snapshot_contract.py",        tier: CODE,            bundle: "-",                          note: "Session snapshot payload schema" }
+  - { file: "nightclaw_bridge/sources.py",                  tier: CODE,            bundle: "-",                          note: "Read-only parsers: NOTIFICATIONS, audit/*, OPS-PREAPPROVAL, ACTIVE-PROJECTS, scr-verify, longrunner-extract" }
+  - { file: "nightclaw_bridge/state.py",                    tier: CODE,            bundle: "-",                          note: "In-memory session state" }
+
+  # nightclaw_monitor/ — UI-side store (6 files)
+  - { file: "nightclaw_monitor/__init__.py",                tier: CODE,            bundle: "-",                          note: "Package marker" }
+  - { file: "nightclaw_monitor/handlers.py",                tier: CODE,            bundle: "-",                          note: "Payload-type handlers" }
+  - { file: "nightclaw_monitor/selectors.py",               tier: CODE,            bundle: "-",                          note: "Store state selectors" }
+  - { file: "nightclaw_monitor/snapshot_adapter.py",        tier: CODE,            bundle: "-",                          note: "Snapshot → store adapter" }
+  - { file: "nightclaw_monitor/snapshot_contract.py",       tier: CODE,            bundle: "-",                          note: "Client-side snapshot schema (mirrors bridge)" }
+  - { file: "nightclaw_monitor/store.py",                   tier: CODE,            bundle: "-",                          note: "MonitorStore (canonical) + Store (back-compat)" }
+
+  # nightclaw_ops/ — engine-side telemetry emitter (3 files)
+  - { file: "nightclaw_ops/__init__.py",                    tier: CODE,            bundle: "-",                          note: "Package marker" }
+  - { file: "nightclaw_ops/lifecycle.py",                   tier: CODE,            bundle: "-",                          note: "step() context manager; reads NIGHTCLAW_RUN_ID" }
+  - { file: "nightclaw_ops/telemetry.py",                   tier: CODE,            bundle: "-",                          note: "emit_step(); UNIX socket fire-and-forget; never raises" }
+
+  # apps/monitor/ — UI assets (4 files)
+  - { file: "apps/monitor/nightclaw-monitor.html",          tier: CODE,            bundle: "-",                          note: "Unified operator monitor; live event stream + allowlisted admin controls over WS /ws" }
+  - { file: "apps/monitor/nightclaw-sessions.html",         tier: CODE,            bundle: "-",                          note: "Sessions feed UI; WS /sessions" }
+  - { file: "apps/monitor/NightClaw-Data-Flow.html",        tier: CODE,            bundle: "-",                          note: "Data Flow SVG diagram (iframe child of nightclaw-monitor.html); reacts to postMessage {type:'nc-highlight',step,nodes}" }
+  - { file: "apps/monitor/owner.html",                      tier: CODE,            bundle: "-",                          note: "Project-owner view; same WS /ws contract + additive RO frame types project_snapshot/session_replay routed by nightclaw_bridge.runtime" }
+
+  # OS compounding file archives — manager T8 archival only
+  - { file: "orchestration-os/OPS-FAILURE-MODES-ARCHIVE.md", tier: APPEND,          bundle: "standalone",                 note: "Manager T8 archival only — receives RESOLVED entries moved from OPS-FAILURE-MODES.md. Never delete." }
+  - { file: "AGENTS-LESSONS-ARCHIVE.md",                    tier: APPEND,          bundle: "standalone",                 note: "Manager T8 archival only — receives aged lessons moved from AGENTS-LESSONS.md. Never delete." }
+  - { file: "orchestration-os/OPS-TOOL-REGISTRY-ARCHIVE.md", tier: APPEND,         bundle: "standalone",                 note: "Manager T8 archival only — receives superseded entries from OPS-TOOL-REGISTRY.md. Never delete." }
+
+  # --- Public docs, internal enhancement surfaces + runtime entrypoint ---
+  # These rows close registry-route gaps discovered in the graph-integrity
+  # stress review. Pure routing additions; no behavioral change to bundles.
+  - { file: "README.md",                                    tier: STANDARD,        bundle: "standalone",                 note: "User-facing README. {OWNER} edits only." }
+  - { file: "INSTALL.md",                                   tier: STANDARD,        bundle: "standalone",                 note: "Install pointer. {OWNER} edits only; keep aligned with README § Install." }
+  - { file: "DEPLOY.md",                                    tier: STANDARD,        bundle: "standalone",                 note: "Deploy guide. {OWNER} edits only." }
+  - { file: "internal_enhancement/README.md",               tier: STANDARD,        bundle: "standalone",                 note: "Maintainer-only internal enhancement index. {OWNER} edits only." }
+  - { file: "internal_enhancement/ARCHITECTURE.md",         tier: STANDARD,        bundle: "standalone",                 note: "Internal architecture and maintenance map. {OWNER} edits only." }
+  - { file: "internal_enhancement/LLM-BOOTSTRAP.yaml",      tier: STANDARD,        bundle: "standalone",                 note: "Maintainer bootstrap tracks. Not read by cron prompts." }
+  - { file: "internal_enhancement/CURRENT-PASS.md",         tier: STANDARD,        bundle: "standalone",                 note: "Maintainer handoff and live known-issues surface." }
+  - { file: "orchestration-os/START-HERE.md",               tier: STANDARD,        bundle: "standalone",                 note: "Agent orientation entry. {OWNER} edits only." }
+  - { file: "scripts/nightclaw-ops.py",                     tier: STANDARD,        bundle: "standalone",                 note: "Runtime entrypoint (~107-line forwarder). {OWNER} edits only; SCR-10 scopes CODE tier to nightclaw_*/ and apps/monitor/ only." }
+
+  - { file: "[any unlisted file]",                          tier: STANDARD,        bundle: "standalone",                 note: "Default. When in doubt." }

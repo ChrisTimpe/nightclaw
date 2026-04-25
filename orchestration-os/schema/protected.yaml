@@ -1,0 +1,35 @@
+# Protected paths — sole list consulted by:
+#   1. route_for(file) gate (R3 PROTECTED tier check)
+#   2. CL5 audit rule (manager T8 protected-field audit)
+#   3. INTEGRITY-MANIFEST.md hash enforcement
+#
+# The previous state mixed three sources:
+#   - PROTECTED_PATHS frozenset in scripts/nightclaw-ops.py (line 61)
+#   - R3 rows with tier=PROTECTED in REGISTRY.md
+#   - CL5 PROTECTED-PATHS section in REGISTRY.md
+# All three are now derived from this one file.
+
+protected_paths:
+  - SOUL.md
+  - USER.md
+  - IDENTITY.md
+  - MEMORY.md
+  - AGENTS-CORE.md
+  - orchestration-os/CRON-WORKER-PROMPT.md
+  - orchestration-os/CRON-MANAGER-PROMPT.md
+  - orchestration-os/OPS-PREAPPROVAL.md
+  - orchestration-os/OPS-AUTONOMOUS-SAFETY.md
+  - orchestration-os/CRON-HARDLINES.md
+  - orchestration-os/REGISTRY.md
+
+# Schema files themselves. Modifications require {OWNER} + schema-render.
+# Merge-1 note: enforcement of this list moves to the engine in Merge 2;
+# for now it is documentation.
+schema_paths:
+  - orchestration-os/schema/objects.yaml
+  - orchestration-os/schema/fields.yaml
+  - orchestration-os/schema/routing.yaml
+  - orchestration-os/schema/edges.yaml
+  - orchestration-os/schema/bundles.yaml
+  - orchestration-os/schema/protected.yaml
+  - orchestration-os/schema/scr_rules.yaml

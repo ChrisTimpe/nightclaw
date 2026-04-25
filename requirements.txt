@@ -1,0 +1,24 @@
+# NightClaw runtime and test dependencies.
+#
+# This is the dependency manifest referenced by .github/workflows/gates.yml
+# and used for local development (`pip install -r requirements.txt`).
+#
+# Pinning policy:
+#   - Major versions pinned to prevent accidental breakage.
+#   - Minor versions floated to absorb security patches.
+#   - Additions require a Pass with explicit rationale.
+#
+# Runtime dependencies (imports found in nightclaw_engine, nightclaw_bridge,
+# nightclaw_monitor, nightclaw_ops, scripts/):
+#   - PyYAML: schema loader (nightclaw_engine/schema/loader.py) and multiple
+#     YAML-emitting commands. Imported under a guarded `import yaml` block
+#     so the package also degrades gracefully if unavailable at runtime.
+#
+# Optional Phase 2 / test dependencies:
+#   - websockets: bridge server WebSocket listener (nightclaw_bridge/runtime.py)
+#     and live WebSocket routing E2E coverage.
+#   - pytest: test runner; also the `-x -q` gate in gates.yml.
+#
+pytest>=7.0
+PyYAML>=6.0.1,<7
+websockets>=14.0,<16

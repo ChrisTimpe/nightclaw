@@ -1,0 +1,160 @@
+# R1 — OBJECT REGISTRY
+# Every object type: what it is, where it lives, who reads it, who writes it.
+# Sourced from orchestration-os/REGISTRY.md R1 (pre-Merge-1 content).
+# Keep entries ordered as they appear in REGISTRY.md for diff stability.
+
+objects:
+  - obj: OBJ:DISPATCH
+    file: ACTIVE-PROJECTS.md
+    pk: slug
+    reader: "worker:T1,manager:T2/T3/T3.5"
+    writer: "worker:bundles,manager:T6"
+    append_only: false
+  - obj: OBJ:PROJ
+    file: PROJECTS/[slug]/LONGRUNNER.md
+    pk: singleton
+    reader: "worker:T2,manager:T3.5"
+    writer: "worker:bundles"
+    append_only: false
+  - obj: OBJ:PROJ-DRAFT
+    file: PROJECTS/[slug]/LONGRUNNER-DRAFT.md
+    pk: singleton
+    reader: "manager:T3.5"
+    writer: "worker:idle-cycle(Tier4)"
+    append_only: false
+  - obj: OBJ:RUN
+    file: audit/SESSION-REGISTRY.md
+    pk: RUN-YYYYMMDD-NNN
+    reader: "worker:startup,manager:T0"
+    writer: "worker:T9,manager:T9"
+    append_only: true
+  - obj: OBJ:TASK
+    file: audit/AUDIT-LOG.md
+    pk: RUN-ID.Tstep
+    reader: "manager:T8"
+    writer: "worker:T0/T4/T9,manager:T1/T8/T9"
+    append_only: true
+  - obj: OBJ:CHANGELOG
+    file: audit/CHANGE-LOG.md
+    pk: none
+    reader: "manager:T8"
+    writer: "worker:T4"
+    append_only: true
+  - obj: OBJ:MANIFEST
+    file: audit/INTEGRITY-MANIFEST.md
+    pk: filepath
+    reader: "worker:T0,manager:T1"
+    writer: "manager:T1(timestamps),{OWNER}(hashes)"
+    append_only: false
+  - obj: OBJ:PA
+    file: orchestration-os/OPS-PREAPPROVAL.md
+    pk: PA-NNN
+    reader: "worker:T2.7"
+    writer: "{OWNER}"
+    append_only: false
+  - obj: OBJ:CHAIN
+    file: audit/APPROVAL-CHAIN.md
+    pk: PA-NNN-INV-NNN
+    reader: "manager:T8"
+    writer: "worker:T2.7"
+    append_only: true
+  - obj: OBJ:FM
+    file: orchestration-os/OPS-FAILURE-MODES.md
+    pk: FM-NNN(seq)
+    reader: "-"
+    writer: "worker:T7c"
+    append_only: false
+  - obj: OBJ:NOTIFY
+    file: NOTIFICATIONS.md
+    pk: none
+    reader: "manager:T2/T3.5,worker:T1.5,{OWNER}"
+    writer: "worker:bundles,manager"
+    append_only: true
+  - obj: OBJ:NOTIFY-ARCH
+    file: NOTIFICATIONS-ARCHIVE.md
+    pk: none
+    reader: "{OWNER}"
+    writer: "manager:T8.3"
+    append_only: true
+  - obj: OBJ:MEMORY
+    file: memory/YYYY-MM-DD.md
+    pk: none
+    reader: "manager:T4,manager:T3.5"
+    writer: "worker:T9,manager:T3/T3.5/T9"
+    append_only: true
+  - obj: OBJ:REGISTRY
+    file: PROJECTS/MANAGER-REVIEW-REGISTRY.md
+    pk: slug+date
+    reader: "manager:T3"
+    writer: "manager:T7"
+    append_only: false
+  - obj: OBJ:TOOLREG
+    file: orchestration-os/OPS-TOOL-REGISTRY.md
+    pk: tool+date
+    reader: "-"
+    writer: "worker:T7a"
+    append_only: false
+  - obj: OBJ:LESSONS
+    file: AGENTS-LESSONS.md
+    pk: none
+    reader: "agent:on-demand"
+    writer: "worker:T7d"
+    append_only: true
+  - obj: OBJ:LOCK
+    file: LOCK.md
+    pk: none
+    reader: "worker:STARTUP,manager:STARTUP"
+    writer: "worker:STARTUP+T9,manager:STARTUP+T9"
+    append_only: false
+
+  # --- Pass 5: four code packages + UI assets (CODE tier) ---
+  # Code packages are objects too: they have a file (the package directory),
+  # a primary key (module path), readers (callers), writers (developers via PR).
+  - obj: OBJ:PKG-ENGINE
+    file: nightclaw_engine/
+    pk: module_path
+    reader: "scripts/nightclaw-ops.py,tests/"
+    writer: "{OWNER}:via-PR"
+    append_only: false
+  - obj: OBJ:PKG-BRIDGE
+    file: nightclaw_bridge/
+    pk: module_path
+    reader: "apps/monitor/*.html (via WebSocket),tests/"
+    writer: "{OWNER}:via-PR"
+    append_only: false
+  - obj: OBJ:PKG-MONITOR
+    file: nightclaw_monitor/
+    pk: module_path
+    reader: "apps/monitor/*.html (import at runtime),tests/"
+    writer: "{OWNER}:via-PR"
+    append_only: false
+  - obj: OBJ:PKG-OPS
+    file: nightclaw_ops/
+    pk: module_path
+    reader: "scripts/nightclaw-ops.py (lifecycle wrapper),tests/"
+    writer: "{OWNER}:via-PR"
+    append_only: false
+  - obj: OBJ:UI-MONITOR
+    file: apps/monitor/
+    pk: filename
+    reader: "browser:via-WebSocket"
+    writer: "{OWNER}:via-PR"
+    append_only: false
+  - obj: OBJ:FM-ARCH
+    file: orchestration-os/OPS-FAILURE-MODES-ARCHIVE.md
+    pk: "FM-NNN(seq)"
+    reader: "{OWNER}"
+    writer: "manager:T8(archival)"
+    append_only: true
+  - obj: OBJ:LESSONS-ARCH
+    file: AGENTS-LESSONS-ARCHIVE.md
+    pk: none
+    reader: "{OWNER}"
+    writer: "manager:T8(archival)"
+    append_only: true
+  - obj: OBJ:TOOLREG-ARCH
+    file: orchestration-os/OPS-TOOL-REGISTRY-ARCHIVE.md
+    pk: tool+date
+    reader: "{OWNER}"
+    writer: "manager:T8(archival)"
+    append_only: true

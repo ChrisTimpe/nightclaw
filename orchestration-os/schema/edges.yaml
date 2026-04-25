@@ -1,0 +1,120 @@
+# R4 — DEPENDENCY EDGES
+# Typed edges for impact traversal.
+# Types: READS | WRITES | VALIDATES | TRIGGERS | REFERENCES | AUTHORIZES
+# Sourced from orchestration-os/REGISTRY.md R4 (pre-Merge-1 content).
+
+edges:
+  # Primary flow: dispatch ↔ projects ↔ bundles
+  - { source: "ACTIVE-PROJECTS.md",              type: READS,      target: "PROJECTS/*/LONGRUNNER.md" }
+  - { source: "ACTIVE-PROJECTS.md",              type: READS,      target: "PROJECTS/*/LONGRUNNER-DRAFT.md (manager T3.5 — search for pending drafts)" }
+  - { source: "ACTIVE-PROJECTS.md",              type: TRIGGERS,   target: "BUNDLE:longrunner_update" }
+  - { source: "ACTIVE-PROJECTS.md",              type: TRIGGERS,   target: "BUNDLE:phase_transition" }
+  - { source: "ACTIVE-PROJECTS.md",              type: TRIGGERS,   target: "BUNDLE:route_block" }
+  - { source: "PROJECTS/*/LONGRUNNER.md",        type: WRITES,     target: "ACTIVE-PROJECTS.md (via bundles)" }
+  - { source: "PROJECTS/*/LONGRUNNER.md",        type: WRITES,     target: "audit/CHANGE-LOG.md (via T4)" }
+
+  # Bundles: what they WRITE
+  - { source: "BUNDLE:longrunner_update",        type: WRITES,     target: "PROJECTS/*/LONGRUNNER.md" }
+  - { source: "BUNDLE:longrunner_update",        type: WRITES,     target: "ACTIVE-PROJECTS.md" }
+  - { source: "BUNDLE:longrunner_update",        type: WRITES,     target: "audit/CHANGE-LOG.md" }
+  - { source: "BUNDLE:longrunner_update",        type: WRITES,     target: "audit/AUDIT-LOG.md" }
+  - { source: "BUNDLE:phase_transition",         type: WRITES,     target: "PROJECTS/*/LONGRUNNER.md" }
+  - { source: "BUNDLE:phase_transition",         type: WRITES,     target: "ACTIVE-PROJECTS.md" }
+  - { source: "BUNDLE:phase_transition",         type: WRITES,     target: "NOTIFICATIONS.md" }
+  - { source: "BUNDLE:phase_transition",         type: WRITES,     target: "audit/CHANGE-LOG.md" }
+  - { source: "BUNDLE:phase_transition",         type: WRITES,     target: "audit/AUDIT-LOG.md" }
+  - { source: "BUNDLE:route_block",              type: WRITES,     target: "ACTIVE-PROJECTS.md" }
+  - { source: "BUNDLE:route_block",              type: WRITES,     target: "audit/CHANGE-LOG.md" }
+  - { source: "BUNDLE:route_block",              type: WRITES,     target: "audit/AUDIT-LOG.md" }
+  - { source: "BUNDLE:surface_escalation",       type: WRITES,     target: "NOTIFICATIONS.md" }
+  - { source: "BUNDLE:surface_escalation",       type: WRITES,     target: "ACTIVE-PROJECTS.md" }
+  - { source: "BUNDLE:surface_escalation",       type: WRITES,     target: "audit/AUDIT-LOG.md" }
+  - { source: "BUNDLE:surface_escalation",       type: WRITES,     target: "audit/CHANGE-LOG.md" }
+
+  # Notifications lifecycle
+  - { source: "NOTIFICATIONS.md",                type: READS,      target: "worker:T1.5 (idle dispatch — worker scans for actionable entries)" }
+  - { source: "NOTIFICATIONS.md",                type: WRITES,     target: "NOTIFICATIONS-ARCHIVE.md (manager T8.3 prune — moves resolved/stale entries)" }
+
+  # Draft lifecycle
+  - { source: "PROJECTS/*/LONGRUNNER-DRAFT.md",  type: READS,      target: "SOUL.md (manager T3.5-A — domain anchor alignment check)" }
+  - { source: "PROJECTS/*/LONGRUNNER-DRAFT.md",  type: READS,      target: "USER.md (manager T3.5-A — constraint validation)" }
+
+  # Pre-approval / approval chain
+  - { source: "BUNDLE:pa_invoke",                type: WRITES,     target: "audit/APPROVAL-CHAIN.md" }
+  - { source: "BUNDLE:pa_invoke",                type: WRITES,     target: "audit/AUDIT-LOG.md" }
+  - { source: "BUNDLE:manifest_verify",          type: WRITES,     target: "audit/INTEGRITY-MANIFEST.md (timestamps only)" }
+  - { source: "BUNDLE:manifest_verify",          type: WRITES,     target: "audit/AUDIT-LOG.md" }
+
+  # Session close
+  - { source: "BUNDLE:session_close",            type: WRITES,     target: "audit/SESSION-REGISTRY.md" }
+  - { source: "BUNDLE:session_close",            type: WRITES,     target: "memory/YYYY-MM-DD.md" }
+  - { source: "memory/README.md",                type: REFERENCES, target: "MEMORY.md" }
+  - { source: "BUNDLE:session_close",            type: WRITES,     target: "audit/AUDIT-LOG.md" }
+  - { source: "BUNDLE:session_close",            type: WRITES,     target: "audit/CHANGE-LOG.md" }
+  - { source: "BUNDLE:session_close",            type: WRITES,     target: "LOCK.md (release)" }
+
+  # Integrity manifest validates protected files
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "SOUL.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "USER.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "IDENTITY.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "MEMORY.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "orchestration-os/CRON-WORKER-PROMPT.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "orchestration-os/CRON-MANAGER-PROMPT.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "orchestration-os/OPS-PREAPPROVAL.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "orchestration-os/OPS-AUTONOMOUS-SAFETY.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "orchestration-os/CRON-HARDLINES.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "orchestration-os/REGISTRY.md" }
+  - { source: "audit/INTEGRITY-MANIFEST.md",     type: VALIDATES,  target: "AGENTS-CORE.md" }
+
+  # Agents index cross-refs
+  - { source: "AGENTS-CORE.md",                  type: REFERENCES, target: "AGENTS-LESSONS.md" }
+  - { source: "AGENTS-CORE.md",                  type: REFERENCES, target: "AGENTS.md" }
+
+  # Lock
+  - { source: "LOCK.md",                         type: READS,      target: "worker:STARTUP" }
+  - { source: "LOCK.md",                         type: READS,      target: "manager:STARTUP" }
+
+  # phase_advance bundle
+  - { source: "BUNDLE:phase_advance",            type: WRITES,     target: "PROJECTS/*/LONGRUNNER.md" }
+  - { source: "BUNDLE:phase_advance",            type: WRITES,     target: "ACTIVE-PROJECTS.md" }
+  - { source: "BUNDLE:phase_advance",            type: WRITES,     target: "audit/CHANGE-LOG.md" }
+  - { source: "BUNDLE:phase_advance",            type: WRITES,     target: "audit/AUDIT-LOG.md" }
+
+  # Pre-approval authorization
+  - { source: "orchestration-os/OPS-PREAPPROVAL.md", type: AUTHORIZES, target: "BUNDLE:pa_invoke" }
+  - { source: "orchestration-os/OPS-PREAPPROVAL.md", type: REFERENCES, target: "audit/APPROVAL-CHAIN.md" }
+
+  # Registry ↔ ops.py coupling
+  - { source: "orchestration-os/REGISTRY.md",    type: READS,      target: "scripts/nightclaw-ops.py:bundle-exec (runtime R5 parsing)" }
+
+  # Documentation cross-reference edges
+  - { source: "README.md",                                   type: REFERENCES, target: "INSTALL.md" }
+  - { source: "README.md",                                   type: REFERENCES, target: "DEPLOY.md" }
+  - { source: "README.md",                                   type: REFERENCES, target: "orchestration-os/ORCHESTRATOR.md" }
+  - { source: "README.md",                                   type: REFERENCES, target: "internal_enhancement/ARCHITECTURE.md" }
+  - { source: "INSTALL.md",                                  type: REFERENCES, target: "DEPLOY.md" }
+  - { source: "orchestration-os/START-HERE.md",              type: REFERENCES, target: "orchestration-os/CRON-WORKER-PROMPT.md" }
+
+  # --- Pass 5: code-package import + telemetry edges ---
+  # The only edges that cross Python-package boundaries. Everything else is
+  # communication via filesystem (schema YAML, audit files) or UNIX socket.
+  - { source: "scripts/nightclaw-ops.py",        type: READS,      target: "nightclaw_engine/commands/__init__.py (imports main + COMMANDS)" }
+  - { source: "scripts/nightclaw-ops.py",        type: READS,      target: "nightclaw_ops/lifecycle.py (imports step context manager)" }
+  - { source: "nightclaw_ops/telemetry.py",      type: WRITES,     target: "/tmp/nightclaw-ops.sock (UNIX socket; fire-and-forget JSON events)" }
+  - { source: "nightclaw_bridge/server.py",      type: READS,      target: "/tmp/nightclaw-ops.sock (handle_ops_ingest; validates via is_opsstepevent)" }
+  - { source: "nightclaw_bridge/server.py",      type: WRITES,     target: "apps/monitor/*.html (via WebSocket ws://127.0.0.1:${port}/ws and /sessions)" }
+  - { source: "nightclaw_engine/schema/loader.py", type: READS,    target: "orchestration-os/schema/*.yaml (Tier-A schema)" }
+  - { source: "nightclaw_engine/schema/phases.py", type: READS,    target: "PROJECTS/*/phases.yaml (Tier-C per-project)" }
+
+  # --- Pass 11: model tier switching edges ---
+  - { source: "nightclaw_engine/commands/model_tier.py", type: READS,     target: "MODEL-TIERS.md (parses lightweight/standard/heavy model ID mappings at T9.5)" }
+  - { source: "PROJECTS/*/LONGRUNNER.md",                type: READS,     target: "MODEL-TIERS.md (next_pass.model_tier resolved against MODEL-TIERS.md via set-model-tier at T9.5)" }
+  - { source: "orchestration-os/CRON-WORKER-PROMPT.md",  type: TRIGGERS,  target: "nightclaw_engine/commands/model_tier.py (T9.5 — set-model-tier called after session_close)" }
+  - { source: "apps/monitor/nightclaw-monitor.html", type: READS,  target: "nightclaw_bridge/server.py (WebSocket /ws stream)" }
+  - { source: "apps/monitor/nightclaw-sessions.html", type: READS, target: "nightclaw_bridge/server.py (WebSocket /sessions stream)" }
+  - { source: "nightclaw_engine/commands/bootstrap.py",      type: READS,      target: "internal_enhancement/LLM-BOOTSTRAP.yaml" }
+  - { source: "nightclaw_engine/commands/bootstrap.py",      type: READS,      target: "internal_enhancement/ARCHITECTURE.md" }
+  - { source: "nightclaw_engine/commands/bootstrap.py",      type: READS,      target: "internal_enhancement/CURRENT-PASS.md" }
+  - { source: "internal_enhancement/LLM-BOOTSTRAP.yaml",     type: REFERENCES, target: "internal_enhancement/ARCHITECTURE.md" }
+  - { source: "internal_enhancement/LLM-BOOTSTRAP.yaml",     type: REFERENCES, target: "internal_enhancement/CURRENT-PASS.md" }
+  - { source: "internal_enhancement/ARCHITECTURE.md",        type: REFERENCES, target: "orchestration-os/REGISTRY.md" }
