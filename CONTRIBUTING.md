@@ -26,7 +26,7 @@ For any change that introduces a new file, a new command, a new config file, or 
 
 **1. Bootstrap first (developer/LLM tool — not used by cron sessions)**
 
-NightClaw ships a developer bootstrap tool (`orchestration-os/LLM-BOOTSTRAP.yaml`) that is completely separate from the autonomous cron runtime. The cron worker and manager never call it and are never aware of it. It exists solely for developers and LLMs working on the repo itself.
+NightClaw ships a developer bootstrap tool (`internal_enhancement/LLM-BOOTSTRAP.yaml`) that is completely separate from the autonomous cron runtime. The cron worker and manager never call it and are never aware of it. It exists solely for developers and LLMs working on the repo itself.
 
 ```bash
 python3 scripts/nightclaw-ops.py bootstrap --track=extend
@@ -71,7 +71,7 @@ This overhead exists because NightClaw's autonomous cron sessions use the same g
 
 ### LLM bootstrap tracks
 
-`orchestration-os/LLM-BOOTSTRAP.yaml` is a **developer and LLM tool only**. It is not part of the autonomous cron runtime. The cron worker, cron manager, and the core engine never reference it, call it, or depend on it. It has no R4 edges into the operational graph by design.
+`internal_enhancement/LLM-BOOTSTRAP.yaml` is a **developer and LLM tool only**. It is not part of the autonomous cron runtime. The cron worker and cron manager never reference it, call it, or depend on it.
 
 The bootstrap command projects a scoped, token-budgeted view of the repo for the specific task at hand:
 
