@@ -1,0 +1,2197 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>NightClaw Monitor v7</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font-mono:'JetBrains Mono',Fira Mono,monospace;
+  --font-ui:Inter,system-ui,sans-serif;
+  --text-xs:0.6875rem;--text-sm:0.75rem;--text-base:0.8125rem;
+  --space-1:0.25rem;--space-2:0.5rem;--space-3:0.75rem;--space-4:1rem;
+  --radius-sm:3px;--radius-md:5px;--radius-lg:8px;
+  --transition:160ms cubic-bezier(0.16,1,0.3,1);
+}
+[data-theme="dark"]{
+  --bg:#0f0f0e;--surface:#161614;--surface-2:#1c1b19;--surface-3:#222120;
+  --border:rgba(255,255,255,0.08);--border-hi:rgba(255,255,255,0.14);
+  --text:#c8c6c2;--text-muted:#6e6c69;--text-faint:#3a3937;--text-inv:#0f0f0e;
+  --accent:#3d9e8c;--accent-hi:#4fb8a3;--accent-dim:rgba(61,158,140,0.15);
+  --ok:#4a9e5c;--ok-dim:rgba(74,158,92,0.15);
+  --warn:#c8893a;--warn-dim:rgba(200,137,58,0.15);
+  --err:#b85b5b;--err-dim:rgba(184,91,91,0.15);
+  --info:#5b87b8;--info-dim:rgba(91,135,184,0.15);
+  --future:#9b7ec8;--future-dim:rgba(155,126,200,0.12);
+  --step-active:#1a2e28;--step-done:#152518;
+  --step-border-active:#3d9e8c;--step-border-done:rgba(61,158,140,0.4);
+}
+[data-theme="light"]{
+  --bg:#f5f4f0;--surface:#ffffff;--surface-2:#f9f8f5;--surface-3:#f0ede8;
+  --border:rgba(0,0,0,0.09);--border-hi:rgba(0,0,0,0.15);
+  --text:#1e1c19;--text-muted:#7a7874;--text-faint:#bab8b4;--text-inv:#ffffff;
+  --accent:#0a7a6a;--accent-hi:#0d9a84;--accent-dim:rgba(10,122,106,0.1);
+  --ok:#2d7a3a;--ok-dim:rgba(45,122,58,0.1);
+  --warn:#a06820;--warn-dim:rgba(160,104,32,0.1);
+  --err:#943030;--err-dim:rgba(148,48,48,0.1);
+  --info:#2d5f96;--info-dim:rgba(45,95,150,0.1);
+  --future:#6b4fa8;--future-dim:rgba(107,79,168,0.08);
+  --step-active:#e8f5f2;--step-done:#eaf5ec;
+  --step-border-active:#0a7a6a;--step-border-done:rgba(10,122,106,0.35);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-ui);font-size:var(--text-base);background:var(--bg);
+  color:var(--text);line-height:1.5;height:100vh;overflow:hidden;
+  display:flex;flex-direction:column;padding-bottom:24px;position:relative}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);
+  height:40px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:10}
+.topbar-logo{display:flex;align-items:center;gap:var(--space-2);font-family:var(--font-mono);
+  font-size:var(--text-sm);font-weight:600;color:var(--text);letter-spacing:.04em}
+.topbar-logo svg{color:var(--accent)}
+.topbar-sep{flex:1}
+.conn-indicator{display:flex;align-items:center;gap:6px;font-size:var(--text-xs);
+  font-family:var(--font-mono);color:var(--text-muted)}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--err);
+  transition:background var(--transition)}
+.conn-dot.live{background:var(--ok)}
+.conn-dot.connecting{background:var(--warn);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.session-badge{display:flex;align-items:center;gap:5px;padding:2px 8px;
+  border-radius:var(--radius-sm);font-size:var(--text-xs);font-family:var(--font-mono);
+  background:var(--surface-3);border:1px solid var(--border);color:var(--text-muted)}
+.session-badge.agent-worker{background:var(--info-dim);color:var(--info);
+  border-color:rgba(91,135,184,0.25)}
+.session-badge.agent-manager{background:var(--warn-dim);color:var(--warn);
+  border-color:rgba(200,137,58,0.25)}
+.outcome-badge{padding:2px 8px;border-radius:var(--radius-sm);font-size:var(--text-xs);
+  font-family:var(--font-mono);display:none}
+.outcome-badge.clean{display:inline;background:var(--ok-dim);color:var(--ok);
+  border:1px solid rgba(74,158,92,0.3)}
+.outcome-badge.crash{display:inline;background:var(--err-dim);color:var(--err);
+  border:1px solid rgba(184,91,91,0.3)}
+.outcome-badge.lock_error{display:inline;background:var(--warn-dim);color:var(--warn);
+  border:1px solid rgba(200,137,58,0.3)}
+/* E5 */
+#crash-recover-btn{display:none;margin-left:4px}
+.theme-toggle{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-sm);color:var(--text-muted);
+  transition:background var(--transition),color var(--transition)}
+.theme-toggle:hover{background:var(--surface-3);color:var(--text)}
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:var(--col-left,210px) 1fr var(--col-right,320px);grid-template-rows:1fr;flex:1;min-height:0;overflow:hidden;position:relative}
+/* Drag handles between columns */
+.col-resizer{position:absolute;top:0;bottom:0;width:6px;cursor:col-resize;z-index:20;
+  background:transparent;transition:background 120ms}
+.col-resizer:hover,.col-resizer.dragging{background:var(--accent-dim)}
+.col-resizer-left{left:calc(var(--col-left,210px) - 3px)}
+.col-resizer-right{right:calc(var(--col-right,320px) - 3px)}
+.panel-left{border-right:1px solid var(--border);display:flex;flex-direction:column;
+  overflow:hidden;background:var(--surface)}
+.panel-section-head{padding:var(--space-2) var(--space-3);font-size:var(--text-xs);
+  font-family:var(--font-mono);color:var(--text-muted);letter-spacing:.06em;
+  text-transform:uppercase;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;user-select:none}
+.panel-section-head:hover{background:var(--surface-2)}
+.panel-section-head .sec-chevron{margin-left:auto;padding-left:6px;font-size:10px;
+  flex-shrink:0;transition:transform .2s;color:var(--text-faint)}
+.panel-section-head.collapsed .sec-chevron{transform:rotate(-90deg)}
+/* Collapsible section body */
+.collapsible-body{overflow:hidden;transition:max-height .25s ease}
+.collapsible-body.open{max-height:none}
+/* Zone dividers in right panel: PROJECT / WORKSPACE / SYSTEM */
+.panel-zone-head{
+  padding:4px var(--space-3) 3px;
+  font-size:9px;font-family:var(--font-mono);letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);
+  border-bottom:1px solid var(--border);
+  border-top:2px solid var(--border);
+  background:var(--surface);flex-shrink:0;
+  margin-top:2px;user-select:none}
+.panel-zone-head:first-child{border-top:none;margin-top:0}
+/* Project selector bar — sticky below zone header */
+.project-selector-bar{
+  display:flex;align-items:center;gap:4px;
+  padding:6px var(--space-3) 6px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface-2);flex-shrink:0}
+.project-selector-bar .admin-input{flex:1;min-width:0}
+.project-slug-select{font-weight:600;color:var(--text)}
+/* ── Project State topbar HUD ── */
+.ps-hud{
+  display:flex;align-items:center;gap:6px;
+  padding:3px 10px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface-2);
+  cursor:pointer;user-select:none;flex-shrink:0;
+  transition:background var(--transition)}
+.ps-hud:hover{background:var(--surface-3,var(--surface-2));border-color:var(--accent)}
+.ps-hud-slug{
+  font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text);font-weight:600;letter-spacing:.03em;
+  max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-hud-status{
+  font-family:var(--font-mono);font-size:9px;font-weight:700;
+  padding:1px 6px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em}
+.ps-hud-caret{
+  font-size:8px;color:var(--text-faint);transition:transform .2s;flex-shrink:0}
+.ps-hud.open .ps-hud-caret{transform:rotate(180deg)}
+/* Dropdown panel */
+.ps-dropdown{
+  position:absolute;top:40px;left:0;right:0;z-index:120;
+  background:var(--surface);border-bottom:2px solid var(--accent);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
+  animation:ps-drop-in .15s ease}
+@keyframes ps-drop-in{
+  from{opacity:0;transform:translateY(-6px)}
+  to{opacity:1;transform:translateY(0)}}
+.ps-dropdown-inner{padding:14px 20px 16px;max-width:900px}
+.ps-dropdown-cols{display:flex;gap:32px}
+.ps-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ps-col-head{
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:2px;margin-top:4px}
+.ps-field{
+  display:flex;align-items:baseline;gap:8px;
+  padding:2px 0;border-bottom:1px solid transparent}
+.ps-field:hover{border-bottom-color:var(--border)}
+.ps-label{
+  font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text-muted);min-width:88px;flex-shrink:0}
+.ps-val{
+  font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-val.empty{color:var(--text-faint)}
+/* SCR block pinned to bottom of left panel */
+.scr-left-head{cursor:default !important;border-top:1px solid var(--border);flex-shrink:0}
+.scr-left-block{flex-shrink:0;border-bottom:none;padding-bottom:var(--space-2)}
+.step-list{flex:1;overflow-y:auto;padding:var(--space-2) 0}
+.step-item{display:flex;align-items:center;gap:var(--space-2);padding:5px var(--space-3);
+  border-left:2px solid transparent;
+  transition:background var(--transition),border-color var(--transition)}
+.step-item:hover{background:var(--surface-2)}
+.step-item.active{background:var(--step-active);border-left-color:var(--step-border-active)}
+.step-item.done{border-left-color:var(--step-border-done)}
+.step-key{font-family:var(--font-mono);font-size:var(--text-sm);font-weight:600;
+  min-width:44px;color:var(--text-muted);transition:color var(--transition)}
+.step-item.active .step-key,.step-item.done .step-key{color:var(--accent)}
+.step-item.active .step-key{color:var(--accent-hi)}
+.step-desc{font-size:var(--text-xs);color:var(--text-muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;flex:1}
+.step-item.active .step-desc{color:var(--text)}
+.step-ts{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);white-space:nowrap}
+.step-item.active .step-ts{color:var(--text-muted)}
+.t4-timer{margin:var(--space-1) var(--space-3);padding:4px var(--space-2);
+  background:var(--warn-dim);border:1px solid rgba(200,137,58,0.25);
+  border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--warn);display:none}
+.t4-timer.visible{display:block}
+/* ── Center ── */
+.panel-center{display:flex;flex-direction:column;overflow:hidden;min-height:0;background:var(--bg)}
+.center-tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.center-tab-btn{padding:6px 14px;font-size:var(--text-xs);font-family:var(--font-mono);
+  color:var(--text-muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;
+  margin-bottom:-1px;text-transform:uppercase;letter-spacing:.06em}
+.center-tab-btn:hover{color:var(--text)}
+.center-tab-btn.active{color:var(--accent-hi);border-bottom-color:var(--accent-hi)}
+.graph-frame-wrap{flex:1;position:relative;overflow:hidden}
+.graph-frame-wrap iframe{width:100%;height:100%;border:none;display:block}
+.graph-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:var(--space-3);
+  color:var(--text-muted);font-size:var(--text-sm);background:var(--bg)}
+.graph-placeholder p{max-width:28ch;text-align:center;line-height:1.6;
+  font-size:var(--text-xs)}
+/* E3: audit feed */
+#audit-feed-wrap{flex:1;min-height:0;display:none;position:relative}
+#audit-feed{width:100%;height:100%;overflow-y:auto;padding:var(--space-2) var(--space-3);
+  font-family:var(--font-mono);font-size:var(--text-xs);background:var(--bg);
+  box-sizing:border-box;overscroll-behavior:contain;
+  scrollbar-width:auto;scrollbar-color:var(--text-faint) var(--surface-2)}
+#audit-feed::-webkit-scrollbar{width:12px}
+#audit-feed::-webkit-scrollbar-track{background:var(--surface-2)}
+#audit-feed::-webkit-scrollbar-thumb{background:var(--text-faint);border-radius:6px;
+  border:2px solid var(--surface-2)}
+#audit-feed::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+#center-graph-pane.hidden{display:none !important}
+.audit-line{padding:1px 0;white-space:pre-wrap;word-break:break-all;color:var(--text-muted)}
+.audit-line.critical{color:var(--err);font-weight:600}
+.audit-line.warn{color:var(--warn)}
+.audit-line.ok{color:var(--ok)}
+.audit-line.info{color:var(--text-muted)}
+.active-nodes-bar{display:flex;align-items:center;gap:var(--space-2);
+  padding:5px var(--space-3);border-top:1px solid var(--border);background:var(--surface);
+  font-size:var(--text-xs);font-family:var(--font-mono);color:var(--text-muted);
+  min-height:32px;flex-wrap:wrap;flex-shrink:0}
+.active-nodes-label{color:var(--text-faint);margin-right:var(--space-1)}
+.node-chip{padding:1px 6px;border-radius:var(--radius-sm);background:var(--accent-dim);
+  color:var(--accent);border:1px solid rgba(61,158,140,0.25);font-size:10px}
+/* ── Right panel ── */
+.panel-right{border-left:1px solid var(--border);display:flex;flex-direction:column;
+  overflow:hidden;background:var(--surface)}
+.panel-right-inner{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+/* Project state */
+.state-block{padding:var(--space-3);border-bottom:1px solid var(--border)}
+.state-row{display:flex;align-items:flex-start;gap:var(--space-2);padding:3px 0;
+  font-size:var(--text-xs)}
+.state-label{font-family:var(--font-mono);color:var(--text-muted);
+  min-width:68px;flex-shrink:0;padding-top:1px}
+.state-val-wrap{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.state-val{color:var(--text);font-family:var(--font-mono);font-size:var(--text-xs);
+  word-break:break-all}
+.state-val.empty{color:var(--text-faint)}
+.state-prior{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);
+  text-decoration:line-through;word-break:break-all}
+.state-future{font-family:var(--font-mono);font-size:10px;color:var(--future);
+  word-break:break-all}
+.state-future::before{content:'→ ';opacity:0.65}
+.status-pill{display:inline-block;padding:1px 6px;border-radius:var(--radius-sm);
+  font-size:10px;font-family:var(--font-mono)}
+.status-INPROGRESS{background:var(--info-dim);color:var(--info);
+  border:1px solid rgba(91,135,184,0.25)}
+.status-BLOCKED{background:var(--err-dim);color:var(--err);
+  border:1px solid rgba(184,91,91,0.25)}
+.status-COMPLETE{background:var(--ok-dim);color:var(--ok);
+  border:1px solid rgba(74,158,92,0.25)}
+.status-PAUSED,.status-TRANSITION-HOLD{background:var(--warn-dim);color:var(--warn);
+  border:1px solid rgba(200,137,58,0.25)}
+.status-ACTIVE,.status-ADEQUATE{background:var(--info-dim);color:var(--info);
+  border:1px solid rgba(91,135,184,0.25)}
+.status-STRONG{background:var(--ok-dim);color:var(--ok);
+  border:1px solid rgba(74,158,92,0.25)}
+.status-WEAK{background:rgba(251,146,60,.12);color:#fb923c;
+  border:1px solid rgba(251,146,60,0.25)}
+.status-FAIL,.status-STALEOBJECTIVE{background:var(--err-dim);color:var(--err);
+  border:1px solid rgba(184,91,91,0.25)}
+/* Field changes */
+.change-block{padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border)}
+.change-list{display:flex;flex-direction:column;gap:2px;max-height:160px;overflow-y:auto}
+.change-item{font-family:var(--font-mono);font-size:10px;display:flex;gap:var(--space-2);
+  padding:2px 0;border-bottom:1px solid var(--border);color:var(--text-muted)}
+.change-item:last-child{border-bottom:none}
+.change-field{color:var(--accent);flex-shrink:0;max-width:110px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.change-old{color:var(--text-faint);text-decoration:line-through;max-width:56px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.change-new{color:var(--text);max-width:56px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.change-empty{font-size:var(--text-xs);color:var(--text-faint);font-family:var(--font-mono)}
+/* Bundle history */
+.bundle-block{padding:var(--space-3);border-bottom:1px solid var(--border)}
+.bundle-list{display:flex;flex-direction:column;gap:4px}
+.bundle-item{border-radius:var(--radius-sm);background:var(--surface-2);
+  border:1px solid var(--border);font-size:var(--text-xs);
+  font-family:var(--font-mono);overflow:hidden}
+.bundle-ok{border-left:2px solid var(--ok)}
+.bundle-fail{border-left:2px solid var(--err)}
+.bundle-header{display:flex;align-items:center;gap:var(--space-2);
+  padding:4px var(--space-2)}
+.bundle-name{flex:1;color:var(--text);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.bundle-status-ok{color:var(--ok);font-size:10px}
+.bundle-status-fail{color:var(--err);font-size:10px}
+.bundle-mutations{color:var(--text-muted);font-size:10px}
+.bundle-detail{padding:2px var(--space-2) 4px;border-top:1px solid var(--border);display:none}
+.bundle-detail.open{display:block}
+.bundle-mut-line{font-size:10px;color:var(--text-faint);padding:1px 0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bundle-empty{font-size:var(--text-xs);color:var(--text-faint);font-family:var(--font-mono)}
+/* SCR */
+.scr-block{padding:var(--space-3);border-bottom:1px solid var(--border)}
+.scr-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:var(--space-2)}
+.scr-rule{display:flex;align-items:center;gap:5px;padding:3px var(--space-2);
+  border-radius:var(--radius-sm);background:var(--surface-2);
+  font-family:var(--font-mono);font-size:10px;color:var(--text-muted);
+  border:1px solid var(--border)}
+.scr-rule.pass{background:var(--ok-dim);color:var(--ok);
+  border-color:rgba(74,158,92,0.2)}
+.scr-rule.fail{background:var(--err-dim);color:var(--err);
+  border-color:rgba(184,91,91,0.2)}
+.scr-rule.info{background:var(--surface-3,var(--surface-2));color:var(--text-faint);
+  border-color:var(--border);font-style:italic}
+.scr-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.scr-ts{font-size:10px;color:var(--text-faint);font-family:var(--font-mono);margin-top:4px}
+/* E4: Notifications inbox */
+.notif-block{padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border)}
+.notif-list{display:flex;flex-direction:column;gap:0}
+.notif-item{display:flex;gap:var(--space-2);padding:3px 0;font-size:var(--text-xs);
+  font-family:var(--font-mono);border-bottom:1px solid var(--border)}
+.notif-item:last-child{border-bottom:none}
+.notif-ts{color:var(--text-faint);flex-shrink:0}
+.notif-msg{color:var(--text);flex:1;word-break:break-all}
+.notif-empty{font-size:var(--text-xs);color:var(--text-faint);font-family:var(--font-mono)}
+/* Admin */
+.admin-block{padding:var(--space-3);border-bottom:1px solid var(--border);
+  display:flex;flex-direction:column;gap:var(--space-2)}
+.admin-btn-group{display:flex;gap:4px;flex-wrap:wrap}
+.admin-btn{padding:3px 8px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);font-size:var(--text-xs);
+  font-family:var(--font-mono);background:var(--surface-2);color:var(--text-muted);
+  transition:background var(--transition),color var(--transition),border-color var(--transition)}
+.admin-btn:hover{background:var(--surface-3);color:var(--text);border-color:var(--border-hi)}
+.admin-btn.destructive{border-color:rgba(184,91,91,0.25);color:var(--text-muted)}
+.admin-btn.destructive:hover{background:var(--err-dim);color:var(--err);
+  border-color:rgba(184,91,91,0.55)}
+.admin-input-row{display:flex;gap:4px}
+.admin-input{flex:1;padding:3px 6px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:var(--text-xs);font-family:var(--font-mono);color:var(--text);
+  outline:none;min-width:0}
+.admin-input:focus{border-color:var(--accent)}
+.admin-input::placeholder{color:var(--text-faint)}
+select.admin-input{appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 6px center;
+  padding-right:20px;cursor:pointer}
+.admin-send-btn{padding:3px 8px;background:var(--accent);color:var(--text-inv);
+  border-radius:var(--radius-sm);font-size:var(--text-xs);font-family:var(--font-mono);
+  font-weight:600;transition:background var(--transition);flex-shrink:0}
+.admin-send-btn:hover{background:var(--accent-hi)}
+/* Console tab pane — fills center panel like audit-feed-wrap */
+.console-tab-toolbar{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:4px var(--space-3);border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0}
+#console-tab-wrap{flex:1;overflow:hidden;flex-direction:column}
+.console-out{flex:1;overflow-y:auto;padding:var(--space-2) var(--space-3);
+  font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text-muted);line-height:1.55;background:var(--bg)}
+.console-line{white-space:pre-wrap;word-break:break-all;padding:1px 0}
+.console-line.ok{color:var(--ok)}.console-line.err{color:var(--err)}
+.console-line.warn{color:var(--warn)}.console-line.info{color:var(--info)}
+.console-line.dim{color:var(--text-faint)}
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+/* Toasts */
+#toast-stack{position:fixed;top:48px;right:var(--space-3);display:flex;
+  flex-direction:column;gap:6px;z-index:100;pointer-events:none;width:290px}
+.toast{display:flex;align-items:flex-start;gap:var(--space-2);
+  padding:var(--space-2) var(--space-3);background:var(--surface-2);
+  border:1px solid var(--border-hi);border-radius:var(--radius-md);
+  font-family:var(--font-mono);font-size:var(--text-xs);
+  box-shadow:0 4px 16px rgba(0,0,0,.3);
+  animation:toast-in 200ms cubic-bezier(0.16,1,0.3,1) forwards;pointer-events:auto}
+.toast.removing{animation:toast-out 180ms ease-in forwards}
+@keyframes toast-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toast-out{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
+.toast-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.toast-info .toast-dot{background:var(--info)}
+.toast-ok .toast-dot{background:var(--ok)}
+.toast-warn .toast-dot{background:var(--warn)}
+.toast-err .toast-dot{background:var(--err)}
+.toast-notify .toast-dot{background:var(--future)}
+.toast-body{flex:1;color:var(--text-muted);line-height:1.45}
+.toast-title{color:var(--text);display:block;font-weight:600;margin-bottom:2px}
+.toast-close{background:none;border:none;color:var(--text-faint);cursor:pointer;
+  padding:0;font-size:14px;line-height:1;flex-shrink:0}
+.toast-close:hover{color:var(--text-muted)}
+/* Session history strip */
+#session-history{position:fixed;bottom:0;left:0;right:0;background:var(--surface);
+  border-top:1px solid var(--border);display:flex;align-items:center;
+  gap:var(--space-2);padding:3px var(--space-4);font-family:var(--font-mono);
+  font-size:10px;color:var(--text-faint);z-index:50;height:24px;overflow:hidden}
+.hist-label{color:var(--text-faint);margin-right:var(--space-1)}
+.hist-item{padding:1px 6px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  font-size:10px;white-space:nowrap;cursor:pointer;transition:opacity 120ms}
+.hist-item:hover{opacity:0.75;border-color:var(--accent)}
+.hist-item.hist-selected{outline:1px solid var(--accent);opacity:1}
+#hist-viewing-banner{display:none;padding:3px var(--space-3);font-family:var(--font-mono);
+  font-size:10px;color:var(--accent);background:var(--surface-2);
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.hist-item.clean{color:var(--ok);background:var(--ok-dim);border-color:rgba(74,158,92,0.2)}
+.hist-item.crash{color:var(--err);background:var(--err-dim);
+  border-color:rgba(184,91,91,0.2)}
+.hist-item.lock_error{color:var(--warn);background:var(--warn-dim);
+  border-color:rgba(200,137,58,0.2)}
+.hist-item.running{color:var(--info);background:var(--info-dim);
+  border-color:rgba(91,135,184,0.2)}
+/* ── E1: Diff overlay ── */
+#diff-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);
+  display:none;align-items:center;justify-content:center;z-index:200}
+#diff-overlay.open{display:flex}
+.diff-pre{position:relative;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:var(--space-3);
+  font-family:var(--font-mono);font-size:var(--text-xs);max-height:70vh;
+  overflow-y:auto;min-width:560px;max-width:90vw;white-space:pre}
+.diff-add{color:var(--ok);display:block}
+.diff-del{color:var(--err);display:block}
+.diff-meta{color:var(--text-faint);display:block}
+.diff-close{position:absolute;top:12px;right:16px;font-size:18px;
+  color:var(--text-muted);background:none;border:none;cursor:pointer;line-height:1}
+.diff-close:hover{color:var(--text)}
+.diff-run-label{font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text-faint);margin-bottom:6px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-logo">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8c0 2.55 1.44 4.77 3.56 5.89C4.75 12.87 4.5 11.47 4.5 10c0-3.04 1.68-5.67 4.14-7.07A6.48 6.48 0 0 0 8 1.5z" fill="currentColor" opacity=".6"/>
+      <path d="M8 2.5C5 2.5 2.5 5 2.5 8s2.5 5.5 5.5 5.5 5.5-2.5 5.5-5.5S11 2.5 8 2.5zm0 9.5c-2.21 0-4-1.79-4-4 0-.97.35-1.86.92-2.56C6.1 7.2 7 9.36 8.6 10.8c.45.4.94.72 1.46.97C9.5 11.88 8.77 12 8 12z" fill="currentColor"/>
+    </svg>
+    NIGHTCLAW <span style="color:var(--text-faint);font-size:10px;margin-left:4px">v7</span>
+  </div>
+  <button class="admin-btn" onclick="openSessionsDash()" title="Open Sessions dashboard" style="font-size:11px;padding:2px 8px;margin-left:4px">sessions &#x2197;</button>
+  <span class="topbar-sep"></span>
+  <span id="session-badge" class="session-badge">no session</span>
+  <span id="outcome-badge" class="outcome-badge"></span>
+  <button id="crash-recover-btn" class="admin-btn" style="display:none;margin-left:4px"
+    onclick="triggerCrashRecover()" title="Fetch crash recovery context">&#x27F3; recover</button>
+  <div class="conn-indicator">
+    <div id="conn-dot" class="conn-dot connecting"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+  <!-- Project State HUD — right-aligned to match project selector on right panel -->
+  <div class="ps-hud" id="ps-hud" onclick="toggleProjectHUD()" title="Project State — click to expand">
+    <span class="ps-hud-slug" id="ps-hud-slug">no project</span>
+    <span class="ps-hud-status" id="ps-hud-status"></span>
+    <span class="ps-hud-caret" id="ps-hud-caret">&#9660;</span>
+  </div>
+  <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
+</header>
+<!-- Project State detail dropdown — anchors below topbar, above layout -->
+<div class="ps-dropdown" id="ps-dropdown" style="display:none">
+  <div class="ps-dropdown-inner">
+    <div class="ps-dropdown-cols">
+      <!-- Left col: core identity fields -->
+      <div class="ps-col">
+        <div class="ps-field"><span class="ps-label">slug</span><span class="ps-val empty" id="st-slug">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">phase</span><span class="ps-val empty" id="st-phase">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">status</span><span class="ps-val empty" id="st-status">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">objective</span><span class="ps-val empty" id="st-objective">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">stop condition</span><span class="ps-val empty" id="st-phasestop">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">routing</span><span class="ps-val empty" id="st-routing">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">is draft</span><span class="ps-val empty" id="st-isdraft">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">blockers</span><span class="ps-val empty" id="st-hasblockers">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">pa active</span><span class="ps-val empty" id="st-paactive">&#8212;</span></div>
+      </div>
+      <!-- Right col: next pass + last run -->
+      <div class="ps-col">
+        <div class="ps-col-head">NEXT</div>
+        <div class="ps-field"><span class="ps-label">next pass</span><span class="ps-val empty" id="st-nextpass">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">next tier</span><span class="ps-val empty" id="st-nexttier">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">next budget</span><span class="ps-val empty" id="st-nextbudget">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">next tools</span><span class="ps-val empty" id="st-nexttools">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">successor</span><span class="ps-val empty" id="st-phasesuccessor">&#8212;</span></div>
+        <div class="ps-col-head" style="margin-top:10px">LAST</div>
+        <div class="ps-field"><span class="ps-label">last quality</span><span class="ps-val empty" id="st-lastquality">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">last obj</span><span class="ps-val empty" id="st-lastobjective">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">last output</span><span class="ps-val empty" id="st-lastoutput">&#8212;</span></div>
+        <div class="ps-field"><span class="ps-label">last date</span><span class="ps-val empty" id="st-lastdate">&#8212;</span></div>
+      </div>
+    </div>
+    <!-- Prior values row (change tracking) - hidden spans kept for JS compat -->
+    <div style="display:none">
+      <span id="prior-slug"></span><span id="prior-phase"></span><span id="prior-status"></span>
+      <span id="prior-objective"></span><span id="prior-phasestop"></span><span id="prior-phasesuccessor"></span>
+      <span id="prior-nextpass"></span><span id="prior-nexttier"></span><span id="prior-nextbudget"></span>
+      <span id="prior-nexttools"></span><span id="prior-lastquality"></span><span id="prior-lastobjective"></span>
+      <span id="prior-lastoutput"></span><span id="prior-lastdate"></span><span id="prior-routing"></span>
+      <span id="prior-isdraft"></span><span id="prior-hasblockers"></span><span id="prior-paactive"></span>
+      <span id="future-nextpass"></span><span id="future-nexttier"></span><span id="future-nextbudget"></span>
+      <span id="future-nexttools"></span><span id="future-phasesuccessor"></span>
+    </div>
+  </div>
+</div>
+<div class="layout" id="layout-grid">
+  <div class="col-resizer col-resizer-left" id="resizer-left"></div>
+  <div class="col-resizer col-resizer-right" id="resizer-right"></div>
+  <aside class="panel-left">
+    <div class="panel-section-head">Session Steps</div>
+    <div id="hist-viewing-banner"></div>
+    <div class="step-list" id="step-list"></div>
+    <div class="t4-timer" id="t4-timer">&#9203; T4 executing&#8230; <span id="t4-elapsed">0</span>s</div>
+    <!-- SCR Verify moved to left panel — always visible alongside steps -->
+    <div class="panel-section-head scr-left-head" style="cursor:default">
+      SCR Verify
+      <span id="scr-summary" style="font-family:var(--font-mono);font-size:var(--text-xs);
+        color:var(--text-faint);margin-left:4px;text-transform:none;letter-spacing:0">&#8212;</span>
+      <button class="admin-btn" onclick="sendAdminCommand('scr')"
+        title="Run Self-Consistency Rules check"
+        style="margin-left:auto;flex-shrink:0;font-size:9px;padding:1px 6px">run</button>
+    </div>
+    <div class="scr-block scr-left-block">
+      <div class="scr-grid" id="scr-grid"></div>
+      <div class="scr-ts" id="scr-ts"></div>
+    </div>
+  </aside>
+  <main class="panel-center">
+    <div class="center-tab-bar">
+      <button class="center-tab-btn" id="tab-btn-audit" onclick="switchCenterTab('audit')">Audit Feed</button>
+      <button class="center-tab-btn active" id="tab-btn-graph" onclick="switchCenterTab('graph')">Data Flow</button>
+      <button class="center-tab-btn" id="tab-btn-console" onclick="switchCenterTab('console')">Console</button>
+    </div>
+    <div class="graph-frame-wrap" id="center-graph-pane">
+      <iframe id="graph-frame" src="NightClaw-Data-Flow.html" title="Data Flow"
+        sandbox="allow-scripts allow-same-origin"></iframe>
+      <div class="graph-placeholder" id="graph-placeholder" style="display:none">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/>
+          <circle cx="19" cy="19" r="2"/>
+          <path d="M12 7v4M12 11l-5.5 6M12 11l5.5 6"/>
+        </svg>
+        <p>Place NightClaw-Data-Flow.html in the same directory to enable live graph.</p>
+      </div>
+    </div><!-- /center-graph-pane -->
+    <div id="audit-feed-wrap">
+      <div id="audit-feed"></div>
+    </div>
+    <!-- Console tab pane — same #console-out element; log() writes here regardless of active tab -->
+    <div id="console-tab-wrap" style="display:none;flex:1;overflow:hidden;display:none;flex-direction:column">
+      <div class="console-tab-toolbar">
+        <span style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Console</span>
+        <span id="console-line-count" style="color:var(--text-faint);font-size:10px;font-family:var(--font-mono);margin-left:8px"></span>
+        <button class="admin-btn" style="margin-left:auto"
+          onclick="document.getElementById('console-out').innerHTML=''"
+          title="Clear console">&#x239A; clear</button>
+      </div>
+      <div class="console-out" id="console-out">
+        <div class="console-line dim">Bridge initializing</div>
+      </div>
+    </div>
+    <div class="active-nodes-bar">
+      <span class="active-nodes-label">nodes</span>
+      <span id="nodes-list" style="color:var(--text-faint);font-size:10px">&#8212;</span>
+    </div>
+  </main>
+  <aside class="panel-right">
+    <div class="panel-right-inner">
+
+      <!-- ══════════════════════════════════════════════════
+           ZONE: PROJECT — scoped to the selected project
+           ══════════════════════════════════════════════════ -->
+      <div class="panel-zone-head">PROJECT</div>
+
+      <!-- Project selector — always visible, drives all PROJECT sections -->
+      <div class="project-selector-bar">
+        <select class="admin-input project-slug-select" id="admin-slug-select"
+          onchange="onSlugSelectChange(this)" title="Select active project">
+          <option value="">-- select project --</option>
+        </select>
+        <input class="admin-input" id="admin-slug" placeholder="type slug"
+          style="display:none;min-width:0;flex:1">
+        <button class="admin-btn" onclick="sendAdminCommand('active_projects')"
+          title="Refresh project list">&#x21BA;</button>
+      </div>
+
+      <!-- Field Changes -->
+      <div class="panel-section-head" data-sec="fc">Field Changes
+        <span id="cl-count" style="font-family:var(--font-mono);font-size:var(--text-xs);
+          color:var(--text-faint);margin-left:4px;text-transform:none;letter-spacing:0"></span>
+        <span class="sec-chevron">&#9660;</span>
+      </div>
+      <div class="collapsible-body open" id="sec-body-fc">
+        <div class="change-block">
+          <div class="change-list" id="change-list">
+            <span class="change-empty">No changes recorded.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bundle History -->
+      <div class="panel-section-head" data-sec="bh">Bundle History<span class="sec-chevron">&#9660;</span></div>
+      <div class="collapsible-body open" id="sec-body-bh">
+        <div class="bundle-block">
+          <div class="bundle-list" id="bundle-list">
+            <span class="bundle-empty">No bundles this session.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project Actions -->
+      <div class="panel-section-head" data-sec="pact">Project Actions<span class="sec-chevron">&#9660;</span></div>
+      <div class="collapsible-body open" id="sec-body-pact">
+        <div class="admin-block">
+          <!-- Approve / Decline / Pause / Unpause -->
+          <div class="admin-btn-group">
+            <button class="admin-btn" onclick="adminSlug('approve')">approve</button>
+            <button class="admin-btn destructive" onclick="adminSlug('decline')">decline</button>
+            <button class="admin-btn" onclick="adminSlug('pause')">pause</button>
+            <button class="admin-btn" onclick="adminSlug('unpause')">unpause</button>
+          </div>
+          <!-- Guidance -->
+          <div class="admin-input-row" style="margin-top:4px">
+            <input class="admin-input" id="admin-guide" placeholder="guidance message" style="flex:1">
+            <button class="admin-send-btn" onclick="adminGuide()" title="Send guidance">&#8594;</button>
+          </div>
+          <!-- Priority / Phase / Diag / Archive -->
+          <div class="admin-btn-group" style="margin-top:4px">
+            <button class="admin-btn" onclick="adminSlug('phase')">phase</button>
+            <button class="admin-btn" onclick="sendAdminCommand('diag_longrunner')"
+              title="Diagnose why Project State is empty">diag LR</button>
+            <button class="admin-btn destructive" onclick="adminArchiveProject()"
+              title="Mark slug as archived in ACTIVE-PROJECTS.md">archive</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════
+           ZONE: WORKSPACE — cross-project / cross-session
+           ══════════════════════════════════════════════════ -->
+      <div class="panel-zone-head">WORKSPACE</div>
+
+      <!-- Notifications -->
+      <div class="panel-section-head" data-sec="nf">Notifications
+        <span id="notif-count" style="font-family:var(--font-mono);font-size:var(--text-xs);
+          color:var(--text-faint);margin-left:4px;text-transform:none;letter-spacing:0">&#8212;</span>
+        <span class="sec-chevron">&#9660;</span>
+      </div>
+      <div class="collapsible-body open" id="sec-body-nf">
+        <div class="notif-block">
+          <div class="notif-list" id="notif-list">
+            <span class="notif-empty">No notifications this session.</span>
+          </div>
+          <div class="admin-input-row" style="margin-top:4px">
+            <input class="admin-input" id="admin-done-line" placeholder="notif line #"
+              type="number" min="1" style="max-width:88px">
+            <button class="admin-btn" onclick="adminDone()" style="flex:1">mark done</button>
+            <button class="admin-btn" onclick="sendAdminCommand('notifications',{count:40})"
+              title="Reload notifications from workspace">reload</button>
+            <button class="admin-btn destructive" onclick="clearNotificationsConfirm()"
+              title="Archive then clear NOTIFICATIONS.md — audit trail preserved">clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════
+           ZONE: SYSTEM — infra, integrity, bridge
+           ══════════════════════════════════════════════════ -->
+      <div class="panel-zone-head">SYSTEM</div>
+
+      <!-- Pre-approvals -->
+      <div class="panel-section-head" data-sec="pa">Pre-approvals<span class="sec-chevron">&#9660;</span></div>
+      <div class="collapsible-body open" id="sec-body-pa">
+        <div class="admin-block">
+          <div class="admin-input-row">
+            <select class="admin-input" id="admin-pa"
+              title="Select a pre-approval to arm or disarm" style="flex:1;min-width:0">
+              <option value="">loading PAs…</option>
+            </select>
+          </div>
+          <div class="admin-btn-group" style="margin-top:4px">
+            <button class="admin-btn" onclick="adminPA('arm')" style="flex:1"
+              title="Arm the selected pre-approval — worker may invoke it automatically">arm PA</button>
+            <button class="admin-btn destructive" onclick="adminPA('disarm')" style="flex:1"
+              title="Disarm the selected pre-approval — worker must wait for manual approval">disarm</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Integrity / Resign / Validate -->
+      <div class="panel-section-head" data-sec="integ">Integrity<span class="sec-chevron">&#9660;</span></div>
+      <div class="collapsible-body open" id="sec-body-integ">
+        <div class="admin-block">
+          <div class="admin-input-row">
+            <select class="admin-input" id="admin-resign-file" title="Protected file to re-sign" style="flex:1;min-width:0">
+              <option value="">-- select file --</option>
+              <option>SOUL.md</option>
+              <option>USER.md</option>
+              <option>IDENTITY.md</option>
+              <option>MEMORY.md</option>
+              <option>AGENTS-CORE.md</option>
+              <option>orchestration-os/CRON-WORKER-PROMPT.md</option>
+              <option>orchestration-os/CRON-MANAGER-PROMPT.md</option>
+              <option>orchestration-os/OPS-PREAPPROVAL.md</option>
+              <option>orchestration-os/OPS-AUTONOMOUS-SAFETY.md</option>
+              <option>orchestration-os/CRON-HARDLINES.md</option>
+              <option>orchestration-os/REGISTRY.md</option>
+            </select>
+          </div>
+          <div class="admin-btn-group" style="margin-top:4px">
+            <button class="admin-btn" onclick="adminResign()" style="flex:1">resign</button>
+            <button class="admin-btn" onclick="adminValidate()" style="flex:1"
+              title="Run validate.sh from workspace root">validate</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bridge / Sessions -->
+      <div class="panel-section-head" data-sec="bridge">Bridge<span class="sec-chevron">&#9660;</span></div>
+      <div class="collapsible-body open" id="sec-body-bridge">
+        <div class="admin-block">
+          <div class="admin-input-row">
+            <input class="admin-input" id="admin-token" type="password"
+              placeholder="bridge token (optional)" style="flex:1;font-size:10px"
+              oninput="authToken=this.value;setAuthToken(this.value)">
+            <button class="admin-btn" onclick="document.getElementById('admin-token').type=
+              document.getElementById('admin-token').type==='password'?'text':'password'"
+              title="Show/hide token" style="flex-shrink:0;width:28px">&#128065;</button>
+            <button class="admin-btn" onclick="forceReconnect()"
+              title="Force reconnect with current token" style="flex-shrink:0">&#x21BA;</button>
+          </div>
+          <div class="admin-btn-group" style="margin-top:4px">
+            <button class="admin-btn" onclick="sendAdminCommand('status')">status</button>
+            <button class="admin-btn" onclick="sendAdminCommand('alerts')">alerts</button>
+            <button class="admin-btn" onclick="sendAdminCommand('log',{count:20})">log 20</button>
+            <button class="admin-btn" onclick="sendAdminCommand('changes',{count:20})">changes</button>
+            <button class="admin-btn" onclick="sendAdminCommand('audit',{count:40})">audit</button>
+            <button class="admin-btn" onclick="openSessionsDash()">sessions &#x2197;</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+</div>
+
+<div id="toast-stack" aria-live="polite" aria-atomic="false"></div>
+<div id="session-history">
+  <span class="hist-label">sessions</span>
+  <span id="hist-list" style="color:var(--text-faint)">&#8212;</span>
+</div>
+<!-- E1: Diff overlay -->
+<div id="diff-overlay" onclick="if(event.target===this)closeDiff()"></div>
+
+<script>
+/* ── Port detection ── */
+const RECONNECT_BASE_MS = 1000
+const RECONNECT_MAX_MS = 10000;
+const _urlPort = new URLSearchParams(location.search).get('port');
+let bridgePort = _urlPort ? parseInt(_urlPort) : 8787;
+let WS_URL = `ws://127.0.0.1:${bridgePort}/ws`;
+let _configReady;
+if (_urlPort) {
+  _configReady = Promise.resolve();
+} else {
+  _configReady = fetch('nc_config.json').then(r => r.ok ? r.json() : null).then(c => {
+    if (c && c.bridge_port) { bridgePort = c.bridge_port; WS_URL = `ws://127.0.0.1:${bridgePort}/ws`; }
+  }).catch(() => {});
+}
+
+let authToken = '';
+try { authToken = localStorage.getItem('nc_bridge_token') || window.__ncBridgeToken || ''; } catch(_) {}
+// Restore token field value on load
+try {
+  const _tk = localStorage.getItem('nc_bridge_token');
+  if (_tk) { const _el = document.getElementById('admin-token'); if (_el) _el.value = _tk; }
+} catch(_) {}
+
+/* ── Constants ── */
+const STEPS = [
+  {key:'INIT', desc:'Startup — validate integrity, check LOCK, parse REGISTRY'},
+  {key:'T0',   desc:'session-open'},     {key:'T1', desc:'dispatch'},
+  {key:'T2',   desc:'longrunner-extract'},{key:'T3', desc:'tool-gate'},
+  {key:'T4',   desc:'execute'},          {key:'T5', desc:'validate'},
+  {key:'T6',   desc:'bundle-exec'},      {key:'T7', desc:'os-improvement'},
+  {key:'T8',   desc:'scr-verify'},       {key:'T9', desc:'session-close'},
+];
+const SCR_RULES = ['SCR-01','SCR-02','SCR-03','SCR-04','SCR-05','SCR-06','SCR-07','SCR-08','SCR-09','SCR-10','SCR-11','CL5'];
+// Human-readable descriptions for each SCR rule — shown as tooltips on hover.
+// Sourced from nightclaw_engine/protocol/scr_rules.yaml titles.
+const SCR_DESCRIPTIONS = {
+  'SCR-01': 'SCR-01 (HIGH): Every BUNDLE name referenced on an R3 route row must exist as a BUNDLE definition in R5',
+  'SCR-02': 'SCR-02 (HIGH): Every FK→OBJ reference in R2 must resolve to an OBJ entry in R1',
+  'SCR-03': 'SCR-03 (CRITICAL): Every file in the R3 PROTECTED tier must be listed in audit/INTEGRITY-MANIFEST.md',
+  'SCR-04': 'SCR-04 (HIGH): audit/CHANGE-LOG.md must exist',
+  'SCR-05': 'SCR-05 (HIGH): Every run_id in audit/SESSION-REGISTRY.md must be unique — no duplicate RUN-YYYYMMDD-NNN entries',
+  'SCR-06': 'SCR-06 (MEDIUM): Every BUNDLE reference on an R4 dependency edge must resolve to a definition in R5',
+  'SCR-07': 'SCR-07 (INFO): Enumerates REFERENCES edges for manual review — not a pass/fail check',
+  'SCR-08': 'SCR-08 (HIGH): LOCK.md must have status and expires_at fields — session_close bundle must release the lock',
+  'SCR-09': 'SCR-09 (HIGH): For every bundle-exec call in prompts, argument names must match the R5 BUNDLE definition',
+  'SCR-10': 'SCR-10 (HIGH): Every .py file in the four code packages and every .html in apps/monitor/ must have a CODE-tier row in R3',
+  'SCR-11': 'SCR-11 (HIGH): Every R3 row at tier CODE must name a file that actually exists on disk',
+  'CL5':    'CL5: Change-Log level-5 consistency check — verifies change-log entries are well-formed',
+};
+const STEP_GRAPH_MAP = {
+  startup:{nodes:['ops-py','integrity','check-lock','lock','hardlines','registry'],step:'startup'},
+  T0:{nodes:['ops-py','audit-log','session-reg'],step:'T0'},
+  T1:{nodes:['ops-py','active-projects','longrunner','notifications','idle-cycle'],step:'T1'},
+  T2:{nodes:['ops-py','longrunner','active-projects','notifications','preapproval','approval-chain'],step:'T2'},
+  T3:{nodes:['ops-py','tool-status','active-projects'],step:'T3'},
+  T4:{nodes:['ops-py','longrunner','audit-log','project-outputs','change-log','failure-modes'],step:'T4'},
+  T5:{nodes:['ops-py','longrunner','quality-standard','notifications'],step:'T5'},
+  T6:{nodes:['ops-py','registry','longrunner','active-projects','audit-log','change-log'],step:'T6'},
+  T7:{nodes:['ops-py','failure-modes','lessons','knowledge','tool-status','memory-daily'],step:'T7'},
+  T8:{nodes:['ops-py','audit-log','registry','notifications','manager-review-reg'],step:'T8'},
+  T9:{nodes:['ops-py','session-reg','memory-daily','lock','audit-log','change-log'],step:'T9'},
+};
+const STATE_FIELDS = [
+  {id:'slug',label:'slug',pill:false,future:false},
+  {id:'phase',label:'phase',pill:false,future:false},
+  {id:'status',label:'status',pill:true,future:false},
+  {id:'objective',label:'objective',pill:false,future:false},
+  {id:'nextpass',label:'next pass',pill:false,future:true},
+  {id:'nexttier',label:'next tier',pill:false,future:true},
+  {id:'nextbudget',label:'next budget',pill:false,future:true},
+  {id:'nexttools',label:'next tools',pill:false,future:true},
+  {id:'lastquality',label:'last quality',pill:true,future:false},
+  {id:'lastobjective',label:'last obj',pill:false,future:false},
+  {id:'lastoutput',label:'last output',pill:false,future:false},
+  {id:'lastdate',label:'last date',pill:false,future:false},
+  {id:'phasestop',label:'stop condition',pill:false,future:false},
+  {id:'phasesuccessor',label:'successor',pill:false,future:true},
+  {id:'routing',label:'routing',pill:true,future:false},
+  {id:'isdraft',label:'is draft',pill:true,future:false},
+  {id:'hasblockers',label:'blockers',pill:true,future:false},
+  {id:'paactive',label:'pa active',pill:false,future:false},
+];
+
+/* ── E1/E4/E5 state ── */
+let ws = null, reconnectTimer = null, activeStep = null, _currentLR = {};
+let _currentSession = null;    // E4/E5: track current session
+let _pendingDiffRunId = null;  // E1: last diff request run_id
+let _pendingCrashCopy = false; // E5: awaiting crash_context result
+let _auditTailActive = false;  // E3: audit feed active
+let sessionHistory = [];
+// V7 protocol: reconnect/auth state
+let reconnectAttempts = 0;
+let authFailedTerminal = false;
+let sessionToken = '';
+let sessionPrivilege = '';
+
+function scheduleReconnect(reason) {
+  if (authFailedTerminal || reconnectTimer) return;
+  const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, reconnectAttempts), RECONNECT_MAX_MS);
+  reconnectAttempts += 1;
+  log(`reconnecting (${reason}) in ${Math.round(delay/1000)}s`, 'dim');
+  reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
+}
+
+/* ── Build step list ── */
+(function() {
+  const list = document.getElementById('step-list');
+  STEPS.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'step-item'; el.dataset.step = s.key;
+    el.style.cursor = 'pointer';
+    el.innerHTML = `<span class="step-key">${s.key}</span><span class="step-desc" id="desc-${s.key}">${s.desc}</span><span class="step-ts" id="ts-${s.key}"></span>`;
+    el.addEventListener('click', () => onStepClick(s.key));
+    list.appendChild(el);
+  });
+})();
+function onStepClick(key) {
+  // Show this step's graph nodes in the Data Flow tab
+  if (STEP_GRAPH_MAP[key]) {
+    updateNodes(STEP_GRAPH_MAP[key]);
+    switchCenterTab('graph');
+  }
+  const tsEl = document.getElementById('ts-' + key);
+  const ts = tsEl ? tsEl.textContent.trim() : '';
+  log('\u2192 step ' + key + (ts ? ' @ ' + ts : '') + ' — graph updated', 'dim');
+}
+
+/* ── Build SCR grid ── */
+(function() {
+  const g = document.getElementById('scr-grid');
+  SCR_RULES.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'scr-rule'; el.id = 'scr-' + r;
+    el.title = SCR_DESCRIPTIONS[r] || r;
+    el.innerHTML = `<span class="scr-dot"></span>${r}`;
+    g.appendChild(el);
+  });
+})();
+
+/* ── Build state rows ── */
+// st-* elements now live in the ps-dropdown HTML above — no dynamic build needed.
+// STATE_FIELDS kept for updateState field iteration.
+
+/* ── Formatters ── */
+function fmtTs(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  catch { return ''; }
+}
+function fmtDur(s) { return s < 60 ? `${s}s` : `${Math.floor(s/60)}m${(s%60).toString().padStart(2,'0')}s`; }
+function trunc(s, n=30) { return s && s.length > n ? s.slice(0, n) + '…' : s; }
+
+// V7: auth badge sourced from bridge privilege, never from local token presence
+function setAuthBadgeFromPrivilege(priv) {
+  const el = document.getElementById('auth-badge');
+  if (!el) return;
+  const p = (priv || '').toLowerCase();
+  el.className = 'auth-badge' + (p ? ' ' + p : '');
+  el.textContent = p === 'rw' ? 'AUTH: RW' : p === 'ro' ? 'AUTH: RO' : 'AUTH: NONE';
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function forceReconnect() {
+  const tokenEl = document.getElementById('admin-token');
+  const val = tokenEl ? tokenEl.value.trim() : '';
+  authToken = val;
+  try {
+    if (val) localStorage.setItem('nc_bridge_token', val);
+    else localStorage.removeItem('nc_bridge_token');
+  } catch(_) {}
+  authFailedTerminal = false;
+  reconnectAttempts = 0;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (ws) { try { ws.close(); } catch(_) {} }
+  log('Forcing reconnect with token: ' + (val ? '(set)' : '(empty — will connect ro)'), 'dim');
+  scheduleReconnect('force');
+}
+function setAuthToken(val) {
+  const prev = authToken;
+  authToken = val || '';
+  try { window.__ncBridgeToken = authToken; } catch(_) {}
+  try {
+    if (authToken) localStorage.setItem('nc_bridge_token', authToken);
+    else localStorage.removeItem('nc_bridge_token');
+  } catch(_) {}
+  if (authToken !== prev) {
+    authFailedTerminal = false;
+    reconnectAttempts = 0;
+    // Bridge privilege is set once at connect-handshake time and cannot be
+    // upgraded on a live socket. Must close and reconnect so the bridge
+    // processes a fresh 'connect' frame with the new token.
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (ws) { try { ws.close(); } catch(_) {} }
+    if (authToken) scheduleReconnect('token-change');
+  }
+}
+
+
+/* ── Step tracker ── */
+function setStep(stepKey, cmd, ts) {
+  const key = stepKey === 'startup' ? 'INIT' : stepKey;
+  if (activeStep && activeStep !== key) {
+    const p = document.querySelector(`.step-item[data-step="${activeStep}"]`);
+    if (p) { p.classList.remove('active'); p.classList.add('done'); }
+  }
+  activeStep = key;
+  const el = document.querySelector(`.step-item[data-step="${key}"]`);
+  if (!el) return;
+  el.classList.add('active'); el.classList.remove('done');
+  if (cmd) document.getElementById('desc-' + key).textContent = cmd;
+  if (ts)  document.getElementById('ts-' + key).textContent = fmtTs(ts);
+}
+function resetSteps() {
+  document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active','done'));
+  document.querySelectorAll('.step-ts').forEach(el => el.textContent = '');
+  STEPS.forEach(s => { const d = document.getElementById('desc-' + s.key); if (d) d.textContent = s.desc; });
+  activeStep = null;
+}
+function applyHistory(history, sessionOutcome, liveSession) {
+  resetSteps();
+  // Session is finished if:
+  //   a) session_outcome carries an outcome (explicit close), OR
+  //   b) no live session object was sent (bridge sets session=null when T9 seen)
+  const sessionDone = !!(sessionOutcome && sessionOutcome.outcome) || !liveSession;
+  history.forEach((h, i) => {
+    const key = h.step === 'startup' ? 'INIT' : h.step;
+    const el = document.querySelector(`.step-item[data-step="${key}"]`);
+    if (!el) return;
+    const isLast = i === history.length - 1;
+    // BUG-7: T9 is session-complete — mark done, not active
+    // Also mark done if session_outcome tells us the session is finished (no live session)
+    const isComplete = isLast && (key === 'T9' || h.outcome || sessionDone);
+    if (!isLast || isComplete) { el.classList.add('done'); el.classList.remove('active'); }
+    else                       { el.classList.add('active'); el.classList.remove('done'); activeStep = key; }
+    if (h.cmd) document.getElementById('desc-' + key).textContent = h.cmd;
+    if (h.ts)  document.getElementById('ts-' + key).textContent = fmtTs(h.ts);
+  });
+  // If session is done or last step was T9/outcome, clear active indicator
+  if (history.length) {
+    const last = history[history.length - 1];
+    if (last.step === 'T9' || last.outcome || sessionDone) activeStep = null;
+  }
+}
+function updateT4(e) {
+  document.getElementById('t4-elapsed').textContent = fmtDur(e);
+  document.getElementById('t4-timer').classList.add('visible');
+}
+function hideT4() { document.getElementById('t4-timer').classList.remove('visible'); }
+
+/* ── Project state ── */
+function updateState(lr, slug) {
+  if (!lr && !slug) return;
+  const prev = Object.assign({}, _currentLR);
+  if (lr) _currentLR = lr;
+  const setField = (id, cur, prior, isFuture, isPill) => {
+    const valEl    = document.getElementById('st-' + id);
+    const priorEl  = document.getElementById('prior-' + id);
+    const futureEl = isFuture ? document.getElementById('future-' + id) : null;
+    if (!valEl) return;
+    const curStr   = Array.isArray(cur)   ? cur.join(', ')   : (cur   || '');
+    const priorStr = Array.isArray(prior) ? prior.join(', ') : (prior || '');
+    if (isFuture) {
+      valEl.textContent = ''; valEl.classList.add('empty');
+      if (futureEl) { futureEl.textContent = trunc(curStr, 36); futureEl.style.display = curStr ? '' : 'none'; }
+    } else {
+      if (isPill && curStr) valEl.innerHTML = `<span class="status-pill status-${curStr}">${curStr}</span>`;
+      else { valEl.textContent = trunc(curStr, 36) || '—'; }
+      valEl.classList.toggle('empty', !curStr);
+    }
+    if (priorEl) {
+      const changed = priorStr && priorStr !== curStr;
+      priorEl.textContent  = changed ? trunc(priorStr, 28) : '';
+      priorEl.style.display = changed ? '' : 'none';
+    }
+  };
+  const resolvedSlug = slug || (lr && lr.slug) || null;
+  if (resolvedSlug) setField('slug', resolvedSlug, prev._slug, false, false);
+  // Always render all fields — pass empty string when lr is sparse/empty
+  // so stale values from a previous project are cleared out.
+  const r = lr || {};
+  setField('phase',       r.phase_name,      prev.phase_name,      false, false);
+  setField('status',      r.phase_status,    prev.phase_status,    false, true);
+  setField('objective',   r.phase_objective || r.objective, prev.phase_objective, false, false);
+  setField('phasestop',   r.phase_stop,      prev.phase_stop,      false, false);
+  setField('phasesuccessor', r.phase_successor, prev.phase_successor, true, false);
+  setField('nextpass',    r.next_pass,       prev.next_pass,       true,  false);
+  setField('nexttier',    r.next_tier,       prev.next_tier,       true,  false);
+  setField('nextbudget',  r.next_budget,     prev.next_budget,     true,  false);
+  setField('nexttools',   r.next_tools,      prev.next_tools,      true,  false);
+  setField('lastquality', r.last_quality,    prev.last_quality,    false, true);
+  setField('lastobjective', r.last_objective, prev.last_objective, false, false);
+  setField('lastoutput',  r.last_output,     prev.last_output,     false, false);
+  setField('lastdate',    r.last_date,       prev.last_date,       false, false);
+  setField('routing',     r.routing,         prev.routing,         false, true);
+  setField('isdraft',     r.is_draft,        prev.is_draft,        false, true);
+  setField('hasblockers', r.has_blockers,    prev.has_blockers,    false, true);
+  setField('paactive',    r.pa_active,       prev.pa_active,       false, false);
+  _currentLR._slug = resolvedSlug || _currentLR._slug;
+  // Sync topbar HUD pill
+  const hudSlug   = document.getElementById('ps-hud-slug');
+  const hudStatus = document.getElementById('ps-hud-status');
+  if (hudSlug)   hudSlug.textContent   = _currentLR._slug || 'no project';
+  if (hudStatus) {
+    const st = (r.phase_status || '').toLowerCase();
+    hudStatus.textContent  = st || '';
+    hudStatus.className    = 'ps-hud-status' + (st ? ' status-' + st : '');
+    hudStatus.style.display = st ? '' : 'none';
+  }
+}
+
+/* ── Change log ── */
+function renderChangeLog(changes, pinnedRunId) {
+  const list    = document.getElementById('change-list');
+  const countEl = document.getElementById('cl-count');
+  if (!changes || !changes.length) {
+    list.innerHTML = '<span class="change-empty">No changes recorded.</span>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  // pinnedRunId='*' means project-scoped view: bridge already filtered the list,
+  // show all entries across every session rather than scoping to one run.
+  let scoped;
+  if (pinnedRunId === '*') {
+    scoped = changes;
+  } else {
+    // Priority: explicit pinned id (historical session click) > active session > most recent in log
+    const activeRunId = pinnedRunId
+      || (_currentSession && _currentSession.run_id)
+      || changes.reduce((best, c) => {
+           if (!c.run_id) return best;
+           return (!best || c.run_id > best) ? c.run_id : best;
+         }, null);
+    if (!activeRunId) {
+      list.innerHTML = '<span class="change-empty">No changes recorded.</span>';
+      if (countEl) countEl.textContent = '';
+      return;
+    }
+    scoped = changes.filter(c => c.run_id === activeRunId);
+  }
+  if (!scoped.length) {
+    list.innerHTML = '<span class="change-empty">No changes this session.</span>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  if (countEl) countEl.textContent = scoped.length;
+  // Project view (*) shows up to 60 entries; session view stays at 20
+  const limit = pinnedRunId === '*' ? 60 : 20;
+  list.innerHTML = scoped.slice(-limit).reverse().map(c => {
+    const _cf = c.file || '';  // BUG-5: guard against undefined/null c.file
+    const label = c.field ? (_cf.split('/').pop() + '#' + c.field) : _cf.split('/').pop();
+    return `<div class="change-item" title="${_cf}${c.field ? '#' + c.field : ''} ${c.old_val} → ${c.new_val}">
+      <span class="change-field" title="${_cf}#${c.field}">${trunc(label,28)}</span>
+      <span class="change-old">${trunc(c.old_val,32)}</span>
+      <span style="color:var(--text-faint);flex-shrink:0">→</span>
+      <span class="change-new">${trunc(c.new_val,32)}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ── Bundle history ── E1: updated with run_id and [diff] badge ── */
+function renderBundles(history) {
+  const list = document.getElementById('bundle-list');
+  if (!history || !history.length) {
+    list.innerHTML = '<span class="bundle-empty">No bundles this session.</span>';
+    return;
+  }
+  const recent = history.slice(-3).reverse();
+  list.innerHTML = recent.map((b, i) => {
+    const ok    = b.ok, muts = (b.mutations_applied || []), guards = (b.guards_checked || []);
+    const did   = 'bd-' + i;
+    const runId = b.run_id || (_currentSession ? _currentSession.run_id : '');
+    const bname = b.bundle_name || '?';
+    const detailLines = muts.length
+      ? muts.map(m => `<div class="bundle-mut-line">${escHtml(m)}</div>`).join('')
+      : guards.length
+        ? `<div class="bundle-mut-line" style="color:var(--text-faint)">guards: ${escHtml(guards.join(', '))}</div>`
+        : `<div class="bundle-mut-line" style="color:var(--text-faint)">(no mutations or guards recorded)</div>`;
+    return `<div class="bundle-item ${ok ? 'bundle-ok' : 'bundle-fail'}">
+      <div class="bundle-header" onclick="toggleBundle('${did}','${escHtml(bname)}','${escHtml(runId)}')" style="cursor:pointer">
+        <span class="bundle-name">${escHtml(bname)}</span>
+        ${muts.length ? `<span class="bundle-mutations">${muts.length} mut</span>` : ''}
+        ${runId ? `<span class="bundle-mutations" style="color:var(--text-faint)" title="Click for file diff">[diff]</span>` : ''}
+        <span class="${ok ? 'bundle-status-ok' : 'bundle-status-fail'}">${ok ? 'OK' : 'FAIL'}</span>
+      </div>
+      <div class="bundle-detail" id="${did}">${detailLines}</div>
+    </div>`;
+  }).join('');
+}
+
+/* E1: toggleBundle with run_id */
+function toggleBundle(id, bundleName, runId) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+  // BUG-11: only send file_diff if we have a real slug — without one
+  // _guessLRFile returns bare 'LONGRUNNER.md' which the bridge rejects
+  // as invalid args, spamming the console with err lines on every click.
+  const slug = (_currentLR && _currentLR._slug) ||
+    (_currentSession && _currentSession.project_slug);
+  if (runId && slug && ws && ws.readyState === WebSocket.OPEN) {
+    const fileRel = _guessLRFile(bundleName);
+    _pendingDiffRunId = runId;
+    sendAdminCommand('file_diff', {file: fileRel, run_id: runId});
+  }
+}
+
+function appendBundle(b) {
+  const list  = document.getElementById('bundle-list');
+  const empty = list.querySelector('.bundle-empty');
+  if (empty) empty.remove();
+  const items = list.querySelectorAll('.bundle-item');
+  if (items.length >= 3) items[items.length - 1].remove();
+  const ok   = b.ok, muts = (b.mutations_applied || []);
+  const did  = 'bd-live-' + Date.now();
+  const runId  = b.run_id || (_currentSession ? _currentSession.run_id : '');
+  const bname  = b.bundle_name || '?';
+  const item = document.createElement('div');
+  item.className = `bundle-item ${ok ? 'bundle-ok' : 'bundle-fail'}`;
+  const guards = b.guards_checked || [];
+  const detailLines = muts.length
+    ? muts.map(m => `<div class="bundle-mut-line">${escHtml(m)}</div>`).join('')
+    : guards.length
+      ? `<div class="bundle-mut-line" style="color:var(--text-faint)">guards: ${escHtml(guards.join(', '))}</div>`
+      : `<div class="bundle-mut-line" style="color:var(--text-faint)">(no mutations or guards recorded)</div>`;
+  item.innerHTML = `<div class="bundle-header" onclick="toggleBundle('${did}','${escHtml(bname)}','${escHtml(runId)}')" style="cursor:pointer">
+    <span class="bundle-name">${escHtml(bname)}</span>
+    ${muts.length ? `<span class="bundle-mutations">${muts.length} mut</span>` : ''}
+    ${runId ? `<span class="bundle-mutations" style="color:var(--text-faint)">[diff]</span>` : ''}
+    <span class="${ok ? 'bundle-status-ok' : 'bundle-status-fail'}">${ok ? 'OK' : 'FAIL'}</span>
+  </div>
+  <div class="bundle-detail" id="${did}">${detailLines}</div>`;
+  list.insertBefore(item, list.firstChild);
+}
+
+/* ── SCR ── */
+function updateSCR(data) {
+  if (!data) return;
+  const checks = data.checks || {};
+  const statuses = data.statuses || {};
+  const det = data.details || {};
+  // Need at least one of checks or statuses to render
+  if (!Object.keys(checks).length && !Object.keys(statuses).length) return;
+  SCR_RULES.forEach(r => {
+    const el = document.getElementById('scr-' + r);
+    if (!el) return;
+    const rawStatus = statuses[r];  // PASS / FAIL / INFO / SKIP / undefined
+    const baseDesc = SCR_DESCRIPTIONS[r] || r;
+    if (rawStatus === 'INFO' || rawStatus === 'SKIP') {
+      el.classList.remove('pass','fail','info');
+      el.classList.add('info');
+      // Show static description + live detail if available
+      el.title = det[r] ? `${baseDesc}\n\nResult: ${det[r]}` : baseDesc;
+    } else if (r in checks) {
+      el.classList.remove('pass','fail','info');
+      el.classList.add(checks[r] ? 'pass' : 'fail');
+      // PASS: show description. FAIL: show description + live failure detail
+      if (checks[r]) {
+        el.title = baseDesc;
+      } else {
+        const detail = det[r] || `${r} FAIL`;
+        el.title = `${baseDesc}\n\nFAIL: ${detail}`;
+      }
+    }
+  });
+  const p = data.passed || 0, f = data.failed || 0;
+  const sum = document.getElementById('scr-summary');
+  if (sum) { sum.textContent = `${p}p ${f}f`; sum.style.color = f > 0 ? 'var(--err)' : 'var(--ok)'; }
+  const ts = document.getElementById('scr-ts');
+  if (ts && data.ts) ts.textContent = 'verified ' + fmtTs(data.ts);
+}
+function resetSCR() {
+  SCR_RULES.forEach(r => { const el = document.getElementById('scr-' + r); if (el) el.className = 'scr-rule'; });
+  const sum = document.getElementById('scr-summary');
+  if (sum) { sum.textContent = '—'; sum.style.color = ''; }
+  const ts = document.getElementById('scr-ts'); if (ts) ts.textContent = '';
+}
+
+/* ── Session badge / outcome ── */
+function updateSessionBadge(ev) {
+  const el = document.getElementById('session-badge');
+  if (!ev || !ev.run_id) { el.textContent = 'no session'; el.className = 'session-badge'; return; }
+  const a = ev.agent_type || 'worker';
+  el.textContent = `${a} ${ev.run_id.slice(0, 10)}`;
+  el.className = 'session-badge agent-' + a;
+}
+function updateOutcome(data) {
+  const el = document.getElementById('outcome-badge');
+  if (!data || !data.outcome) { el.className = 'outcome-badge'; return; }
+  el.className = 'outcome-badge ' + data.outcome;
+  el.textContent = data.outcome.replace(/_/g, ' ');
+  // E5: show recover button on crash
+  const recoverBtn = document.getElementById('crash-recover-btn');
+  if (recoverBtn) recoverBtn.style.display = (data.outcome === 'crash') ? 'inline-flex' : 'none';
+}
+
+/* ── Graph ── */
+function updateNodes(graph) {
+  if (!graph) return;
+  const nodes = graph.nodes, step = graph.step || activeStep;
+  const listEl = document.getElementById('nodes-list');
+  if (!nodes || !nodes.length) {
+    listEl.textContent = '—'; listEl.style.color = 'var(--text-faint)';
+  } else {
+    listEl.innerHTML = nodes.map(n => `<span class="node-chip">${n}</span>`).join('');
+  }
+  const frame = document.getElementById('graph-frame');
+  if (frame && frame.contentWindow) {
+    try { frame.contentWindow.postMessage({type:'nc-highlight', step, nodes}, '*'); } catch {}
+  }
+  const head = document.getElementById('graph-head');
+  if (head) head.textContent = step ? `Data Flow — ${step}` : 'Data Flow';
+}
+
+/* ── Connection ── */
+function sendRawMessage(obj) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(obj));
+  return true;
+}
+
+function setConn(s) {
+  document.getElementById('conn-dot').className = 'conn-dot ' + s;
+  document.getElementById('conn-label').textContent = s === 'live' ? 'LIVE' : s === 'connecting' ? 'CONNECTING' : 'DISCONNECTED';
+}
+
+/* ── Console ── */
+function log(msg, cls) {
+  const out  = document.getElementById('console-out');
+  const line = document.createElement('div');
+  line.className = 'console-line' + (cls ? ' ' + cls : '');
+  line.textContent = msg;
+  out.appendChild(line);
+  while (out.children.length > 200) out.removeChild(out.firstChild);
+  out.scrollTop = out.scrollHeight;
+}
+
+/* ── Session history strip ── */
+function renderHistoryStrip() {
+  const el = document.getElementById('hist-list');
+  if (!el) return;
+  if (!sessionHistory.length) { el.textContent = '—'; return; }
+  // Only show sessions with a confirmed T0 start; fall back to all if none qualify
+  const real = sessionHistory.filter(s => s.has_t0 || s.outcome === 'clean' || s.outcome === 'crash');
+  let pool = real.length ? real : sessionHistory;
+  // Bidirectional filter: if a project is selected in the selector, filter to that project
+  if (_activeProjectFilter) {
+    const filtered = pool.filter(s => s.project_slug === _activeProjectFilter);
+    // Fall back to full pool if filter yields nothing (avoids blank strip on stale data)
+    if (filtered.length) pool = filtered;
+  }
+  const shown = pool.slice().reverse().slice(0, 8);
+  el.innerHTML = shown.map(s => {
+    const cls   = s.outcome || 'running';
+    const short = s.run_id.length > 10 ? '…' + s.run_id.slice(-8) : s.run_id;
+    const tag   = s.agent_type === 'manager' ? ' [M]' : '';
+    const started = s.ts ? fmtTs(s.ts) : '?';
+    // Project slug shown in tooltip only — chips stay compact
+    const tip = s.run_id + ' | ' + (s.agent_type || 'worker') + ' | ' + (s.outcome || 'running') + ' | ' + started
+      + (s.project_slug ? ' | ' + s.project_slug : '');
+    return `<span class="hist-item ${cls}" title="${tip}" onclick="loadHistoricalSession('${escHtml(s.run_id)}')">${short}${tag}</span>`;
+  }).join('');
+}
+function pushSession(entry) {
+  const idx = sessionHistory.findIndex(s => s.run_id === entry.run_id);
+  if (idx >= 0) sessionHistory[idx] = {...sessionHistory[idx], ...entry};
+  else sessionHistory.push(entry);
+  if (sessionHistory.length > 50) sessionHistory.shift();
+  renderHistoryStrip();
+}
+
+/* ── Toasts ── */
+const TOAST_DURATION = 5000;
+function toast(title, msg, level='info') {
+  const stack = document.getElementById('toast-stack');
+  const el    = document.createElement('div');
+  el.className = `toast toast-${level}`;
+  el.innerHTML = `<span class="toast-dot"></span><span class="toast-body"><span class="toast-title">${escHtml(title)}</span>${escHtml(msg)}</span><button class="toast-close" aria-label="Dismiss">&#x2715;</button>`;
+  el.querySelector('.toast-close').addEventListener('click', () => dismissToast(el));
+  stack.appendChild(el);
+  while (stack.children.length > 4) dismissToast(stack.firstChild);
+  setTimeout(() => dismissToast(el), TOAST_DURATION);
+}
+function dismissToast(el) {
+  if (!el || !el.parentNode) return;
+  el.classList.add('removing');
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 180);
+}
+
+/* ── E1: File diff overlay ── */
+function _guessLRFile(bundleName) {
+  const slug = (_currentLR && _currentLR._slug) ? _currentLR._slug :
+    (_currentSession && _currentSession.project_slug ? _currentSession.project_slug : '');
+  return slug ? `PROJECTS/${slug}/LONGRUNNER.md` : 'LONGRUNNER.md';
+}
+function showDiffOverlay(diffText, runId) {
+  const overlay = document.getElementById('diff-overlay');
+  if (!overlay) return;
+  const header = runId
+    ? `<div class="diff-run-label">diff for run ${escHtml(runId)} (best-effort reconstruction)</div>`
+    : '';
+  overlay.innerHTML = `<div class="diff-pre"><button class="diff-close" onclick="closeDiff()">&#x2715;</button>${header}<div>${
+    diffText.split('\n').map(l => {
+      const cls = l.startsWith('+') ? 'diff-add' : l.startsWith('-') ? 'diff-del' : 'diff-meta';
+      return `<span class="${cls}">${escHtml(l)}</span>`;
+    }).join('\n')
+  }</div></div>`;
+  overlay.classList.add('open');
+}
+function closeDiff() {
+  const o = document.getElementById('diff-overlay');
+  if (o) o.classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDiff(); });
+
+/* ── E3: Audit feed ── */
+function _auditAppendLine(line, severity, ts) {
+  // Low-level: add a line to the feed div without switching tabs
+  const feed = document.getElementById('audit-feed');
+  if (!feed) return;
+  const el = document.createElement('div');
+  el.className = `audit-line ${severity || 'info'}`;
+  el.textContent = `${fmtTs(ts)}  ${line}`;
+  feed.appendChild(el);
+  while (feed.children.length > 200) feed.removeChild(feed.firstChild);
+  feed.scrollTop = feed.scrollHeight;
+}
+function appendAuditLine(line, severity, ts, silent) {
+  if (!_auditTailActive) {
+    _auditTailActive = true;
+    // Auto-switch to Audit Feed tab on first live event (skip when silent=true for seeds)
+    if (!silent && typeof switchCenterTab === 'function') switchCenterTab('audit');
+  }
+  _auditAppendLine(line, severity, ts);
+}
+
+/* ── E4: Notifications inbox ── */
+function renderNotifications(entries) {
+  const list = document.getElementById('notif-list');
+  const ct   = document.getElementById('notif-count');
+  if (!list) return;
+  if (!entries || !entries.length) {
+    list.innerHTML = '<span class="notif-empty">No notifications this session.</span>';
+    if (ct) ct.textContent = '—';
+    return;
+  }
+  if (ct) ct.textContent = entries.length;
+  list.innerHTML = entries.slice(-10).reverse().map(e => {
+    const meta = [e.priority, e.project, e.status].filter(Boolean).join(' · ');
+    const msg  = e.message || '';
+    return `<div class="notif-item">
+      <div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap">
+        <span class="notif-ts">${fmtTs(e.ts)}</span>
+        ${meta ? `<span style="color:var(--text-faint)">—</span><span class="notif-msg" style="font-weight:600;font-size:11px">${escHtml(meta)}</span>` : ''}
+      </div>
+      ${msg ? `<div class="notif-msg" style="margin-top:2px;opacity:0.85">${escHtml(msg)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+function appendNotification(message, ts) {
+  const list = document.getElementById('notif-list');
+  const ct   = document.getElementById('notif-count');
+  if (!list) return;
+  const empty = list.querySelector('.notif-empty');
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = 'notif-item';
+  el.innerHTML = `<span class="notif-ts">${fmtTs(ts)}</span><span class="notif-msg">${escHtml(message || '')}</span>`;
+  list.insertBefore(el, list.firstChild);
+  while (list.querySelectorAll('.notif-item').length > 10)
+    list.removeChild(list.lastChild);
+  const cnt = list.querySelectorAll('.notif-item').length;
+  if (ct) ct.textContent = cnt;
+}
+
+/* ── E5: Crash recovery ── */
+function triggerCrashRecover() {
+  const runId = (_currentSession && _currentSession.run_id) ? _currentSession.run_id : '';
+  if (!runId || runId === 'no session') { log('No session run_id for crash recovery', 'warn'); return; }
+  _pendingCrashCopy = true;
+  sendAdminCommand('crash_context', {run_id: runId});
+  log(`\u27F3 fetching crash context for ${runId}`, 'warn');
+}
+
+/* ── Event handler ── */
+function handleEvent(ev) {
+  // project_snapshot: user clicked a different project in the selector.
+  // Render ONLY the project-scoped panels — do NOT clobber step history,
+  // session badge, slug dropdown, or notifications (those are live state).
+  if (ev.event_type === 'project_snapshot') {
+    const slug = ev.project_slug || '';
+    // Clear fields first so stale data from the previous project doesn't bleed through
+    _currentLR = {};
+    if (ev.longrunner) updateState(ev.longrunner, slug);
+    else {
+      // Project has no longrunner — blank all state fields explicitly
+      updateState({}, slug);
+    }
+    if (ev.change_log !== undefined) renderChangeLog(ev.change_log || [], '*');
+    if (ev.bundle_history !== undefined) renderBundles(ev.bundle_history || []);
+    log(`\u2194 project snapshot rendered: ${slug}`, 'dim');
+    return;
+  }
+
+  // session_replay carries the same keys as state_replay — alias it.
+  let et = ev.event_type;
+  if (et === 'session_replay') {
+    if (ev.partial) {
+      toast('Partial replay', 'Longrunner snapshot reconstructed from change-log only', 'warn');
+    }
+    et = 'state_replay';
+  }
+
+  if (et === 'state_replay') {
+    if (ev.auth_required && !authToken) toast('Auth required', 'Set bridge token in Admin panel', 'warn');
+    // Always clear the historical-viewing banner on any fresh state_replay (connect/reconnect).
+    const _hbSR = document.getElementById('hist-viewing-banner'); if (_hbSR) _hbSR.style.display = 'none';
+    if (ev.session && ev.session.run_id) { updateSessionBadge(ev.session); _currentSession = ev.session; }
+    if (ev.session_history && ev.session_history.length) ev.session_history.forEach(s => pushSession(s));
+    else if (ev.session) pushSession({...ev.session, outcome: ev.session_outcome?.outcome || 'running'});
+    if (ev.step_history && ev.step_history.length) applyHistory(ev.step_history, ev.session_outcome, ev.session);
+    else if (!ev.session) resetSteps();  // BUG-1: clear stale T-step UI when no active session
+    if (ev.longrunner) updateState(ev.longrunner, ev.session?.project_slug);
+    if (ev.active_projects && ev.active_projects.length) populateSlugSelect(ev.active_projects);
+    if (ev.change_log && ev.change_log.length) renderChangeLog(ev.change_log, ev.session && ev.session.run_id);
+    if (ev.bundle_history && ev.bundle_history.length) renderBundles(ev.bundle_history);
+    if (ev.scr_last && ev.scr_last.checks) updateSCR(ev.scr_last);
+    if (!ev.session_outcome || !ev.session_outcome.outcome) {
+      const lastStep = ev.step_history ? ev.step_history.slice(-1)[0] : null;
+      if (lastStep && lastStep.step === 'T4' && ev.t4_elapsed) updateT4(ev.t4_elapsed);
+      else hideT4();
+    } else hideT4();
+    if (ev.session_outcome && ev.session_outcome.outcome) updateOutcome(ev.session_outcome);
+    // E4: notifications are workspace-wide — only render on initial connect (state_replay).
+    // Historical session_replay responses return empty [] which would wipe the panel.
+    if (ev.event_type !== 'session_replay') renderNotifications(ev.notifications || []);
+    // BUG-3: only log on full replays (session_history or step_history present), not on every partial
+    if (ev.session_history !== undefined || ev.step_history !== undefined) {
+      log(`\u21BA state replay — ${ev.session_history?.length || 0} sessions`, 'dim');
+    }
+    // Fix 2: seed audit feed from change_log — only on full connect (session_history present),
+    // not on partial state_replay from step events (which only carry change_log + bundle_history).
+    if (ev.session_history !== undefined && ev.change_log && ev.change_log.length) {
+      ev.change_log.slice(-40).forEach(c => {
+        const lbl = (c.file || '').split('/').pop() + (c.field ? '#' + c.field : '');
+        _auditAppendLine('[change] ' + lbl + '  ' + (c.old_val||'') + ' -> ' + (c.new_val||''), 'info', c.ts || ev.ts);
+      });
+    }
+    // Fix 3: seed audit feed from notifications — same gate: full connect only.
+    if (ev.session_history !== undefined && ev.notifications && ev.notifications.length) {
+      ev.notifications.slice(-10).forEach(n => {
+        _auditAppendLine('[notify] ' + (n.message || ''), 'warn', n.ts || ev.ts);
+      });
+    }
+    // Auto-load PA list from bridge on every connect so dropdown stays fresh
+    if (ws && ws.readyState === WebSocket.OPEN) sendAdminCommand('preapprovals', {});
+    return;
+  }
+
+  if (et === 'session_open') {
+    const _hb = document.getElementById('hist-viewing-banner'); if (_hb) _hb.style.display = 'none';
+    document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('hist-selected'));
+    resetSteps(); updateSessionBadge(ev); updateOutcome(null); renderBundles([]); resetSCR(); hideT4(); renderChangeLog([]);
+    _currentSession = ev;          // E4/E5
+    // Do NOT clear notifications on session_open — NOTIFICATIONS.md entries
+    // are persistent file-backed alerts (not session-scoped) and must remain
+    // visible until the user explicitly clears them via the clear button.
+    _currentLR = {};
+    setStep('startup', 'session-open', ev.ts);
+    pushSession({run_id: ev.run_id, agent_type: ev.agent_type || 'worker',
+      outcome: 'running', ts: ev.ts, project_slug: ev.project_slug || ''});
+    // Auto-advance project selector when the new session carries a known slug
+    if (ev.project_slug) {
+      const sel = document.getElementById('admin-slug-select');
+      if (sel) {
+        const opt = [...sel.options].find(o => o.value === ev.project_slug);
+        if (opt && sel.value !== ev.project_slug) {
+          sel.value = ev.project_slug;
+          _activeProjectFilter = ev.project_slug;
+          renderHistoryStrip();
+          log('\u2192 project auto-selected: ' + ev.project_slug, 'dim');
+        }
+      }
+    }
+    toast('Session started', `${ev.agent_type || 'worker'} ${ev.run_id.slice(0, 10)}`, 'info');
+    log(`\u25B6 session open  run=${(ev.run_id||'').slice(0,12)}  agent=${ev.agent_type||'?'}`, 'info');
+    return;
+  }
+
+  if (et === 'session_close') {
+    setStep('T9', 'session-close', ev.ts); hideT4();
+    log(`\u25A0 session close  run=${(ev.run_id||'').slice(0,12)}`, 'dim');
+    return;
+  }
+
+  if (et === 'step') {
+    const step = ev.step;
+    const isExit = ev.exit_code !== undefined;  // enter has no exit_code; exit does
+    setStep(step, ev.cmd || step, ev.ts);
+    if (ev.longrunner) updateState(ev.longrunner, ev.project_slug);
+    if (ev.graph) updateNodes(ev.graph);
+    else if (STEP_GRAPH_MAP[step]) updateNodes(STEP_GRAPH_MAP[step]);
+    // Only log exit events to avoid duplicate lines (each step emits enter + exit).
+    if (isExit) log(`\u2192 ${step.padEnd(4)} ${(ev.cmd||'').padEnd(24)} ${fmtTs(ev.ts)}`, 'info');
+    if (['T5','T6','T7','T8','T9'].includes(step)) hideT4();
+    return;
+  }
+
+  if (et === 't4_heartbeat') { updateT4(ev.elapsed_seconds || 0); return; }
+
+  if (et === 'bundle_exec_result') {
+    appendBundle(ev);
+    if (!ev.ok) toast('Bundle failed', ev.bundle_name || '?', 'err');
+    log(`${ev.ok ? '\u2713\u2713\u2713' : '\u2717\u2717\u2717'} bundle ${ev.bundle_name} guards=${ev.guards_checked.length} mut=${ev.mutations_applied.length}`, ev.ok ? 'ok' : 'err');
+    return;
+  }
+
+  if (et === 'scr_verify_result') {
+    updateSCR(ev);
+    const f = ev.failed || 0;
+    if (f > 0) {
+      const failed = Object.entries(ev.checks).filter(([,v]) => !v).map(([k]) => k);
+      toast('SCR failures', failed.join(', '), 'warn');
+    }
+    log(`\u25C8 scr-verify  ${ev.passed || 0}p ${ev.failed || 0}f`, f > 0 ? 'err' : 'ok');
+    return;
+  }
+
+  if (et === 'session_outcome') {
+    updateOutcome(ev);
+    if (sessionHistory.length) {
+      const last = sessionHistory[sessionHistory.length - 1];
+      if (last) { last.outcome = ev.outcome; renderHistoryStrip(); }
+    }
+    toast('Session complete', ev.outcome.replace(/_/g, ' '), ev.outcome === 'clean' ? 'ok' : 'err');
+    log(`\u25C9 outcome: ${ev.outcome}`, ev.outcome === 'clean' ? 'ok' : 'err');
+    return;
+  }
+
+  if (et === 'notification') {
+    toast('Notification', ev.message || '', 'notify');
+    log(`\uD83D\uDD14 notify: ${ev.message || ''}`, 'warn');
+    appendNotification(ev.message || '', ev.ts); // E4 — also push to panel, not just toast
+    return;
+  }
+
+  if (et === 'command_result') {
+    // BUG-11: suppress failed file_diff silently — invalid args spam is not actionable
+    if (ev.cmd === 'file_diff' && !ev.ok) return;
+    // Populate PA dropdown silently — no console noise
+    if (ev.cmd === 'preapprovals' && ev.ok && ev.data) { populatePASelect(ev.data); return; }
+    log(`$ ${ev.cmd}`, ev.ok ? 'ok' : 'err');
+    // E1: diff output → overlay
+    if (ev.cmd === 'file_diff' && ev.ok && ev.output && ev.output.startsWith('---')) {
+      showDiffOverlay(ev.output, _pendingDiffRunId);
+      _pendingDiffRunId = null;
+      return;
+    }
+    // E5: crash context → console + copy button
+    if (ev.cmd === 'crash_context' && ev.ok && ev.output) {
+      ev.output.split('\n').slice(0, 80).forEach(l => { if (l.trim()) log('  ' + l, 'warn'); });
+      if (_pendingCrashCopy) {
+        _pendingCrashCopy = false;
+        const btn = document.createElement('button');
+        btn.className = 'admin-btn';
+        btn.textContent = '\u2398 copy recovery context';
+        btn.style.marginTop = '4px';
+        btn.onclick = () => navigator.clipboard.writeText(ev.output)
+          .then(() => toast('Copied', 'Recovery context in clipboard', 'ok'));
+        const co = document.getElementById('console-out');
+        if (co) co.appendChild(btn);
+      }
+      return;
+    }
+    if (ev.output) {
+      // Strip ANSI colour codes that survive subprocess capture (e.g. from validate.sh/resign.sh)
+      const stripAnsi = s => s.replace(/\x1b\[[0-9;]*m/g, '');
+      ev.output.split('\n').slice(0, 200).forEach(l => {
+        const c = stripAnsi(l);
+        if (c.trim()) log('  ' + c);
+      });
+    }
+    return;
+  }
+
+  // E3: audit tail
+  if (et === 'audit_tail') {
+    appendAuditLine(ev.line, ev.severity, ev.ts);
+    return;
+  }
+}
+
+/* ── WebSocket ── */
+function connect() {
+  setConn("connecting");
+  sawConnectAck = false;
+  ws = new WebSocket(WS_URL);
+  window.ws = ws;
+
+  ws.onopen = () => {
+    log(`socket open ${WS_URL}`, "dim");
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try {
+      msg = JSON.parse(ev.data);
+    } catch (e) {
+      log(`parse error: ${e.message}`, "err");
+      return;
+    }
+
+    const et = msg.event_type;
+
+    if (et === "connect_required") {
+      const tokenEl = document.getElementById("admin-token");
+      const token = (tokenEl && tokenEl.value.trim()) || authToken || "";
+      authToken = token;
+      log('connect handshake — privilege will be: ' + (token ? 'rw (token present)' : 'ro (no token)'), 'dim');
+      sendRawMessage({ type: "connect", token });
+      return;
+    }
+
+    if (et === "connect_ack") {
+      sessionToken = msg.session_token || '';
+      sessionPrivilege = msg.privilege || '';
+      window.sessionToken = sessionToken;
+      window.sessionPrivilege = sessionPrivilege;
+      sawConnectAck = true;
+      reconnectAttempts = 0;
+      authFailedTerminal = false;
+      // V7: badge always driven by privilege from bridge, never by local token presence
+      setAuthBadgeFromPrivilege(sessionPrivilege);
+      setConn("live");
+      toast("Connected", `bridge privilege=${sessionPrivilege || "rw"} v=${msg.v || 7}`, "info");
+      log(`connected privilege=${sessionPrivilege || "rw"} v=${msg.v || 7}`, "info");
+      return;
+    }
+
+    if (et === "auth_failed") {
+      setConn("disconnected");
+      setAuthBadgeFromPrivilege('');
+      const errCode = msg.error_code || '';
+      if (errCode === 'SESSION_TOKEN_EXPIRED') {
+        // V7: session token stale — clear it and re-auth using bootstrap token
+        sessionToken = '';
+        window.sessionToken = '';
+        authFailedTerminal = false;
+        toast("Session expired", "Re-authenticating…", "warn");
+        log("session token expired, will re-auth with bootstrap token", "warn");
+        if (authToken) scheduleReconnect('session-expired');
+      } else {
+        // Stable AUTH error — stop reconnect until token changes
+        authFailedTerminal = true;
+        toast("Auth failed", msg.output || "Invalid token", "err");
+        log(msg.output || "AUTH FAILED", "err");
+      }
+      return;
+    }
+
+    if (et === "bridge_shutdown") {
+      setConn("disconnected");
+      toast("Bridge shutdown", "Queue drained cleanly — reconnecting with backoff…", "warn");
+      log("bridge_shutdown received — scheduling reconnect", "warn");
+      try { ws.close(); } catch (_) {}
+      // V7: bridge_shutdown is a clean drain; always reconnect with backoff
+      authFailedTerminal = false;
+      scheduleReconnect('bridge-shutdown');
+      return;
+    }
+
+    _pacedDispatch(msg);
+  };
+
+  // Client-side pacing buffer. When the engine emits faster than a human can
+  // read, the UI thrashes (step flips, panes re-sort, diagram re-lights every
+  // few hundred ms). The buffer flushes every flushMs OR on a large structural
+  // event (replay envelopes, command_result, connect_*), whichever comes first.
+  // Pace is persisted in localStorage so the user's choice survives reloads.
+  // Default 'fast' preserves prior behavior for anyone not opting in.
+  const _PACE_MS = { fast: 0, normal: 500, calm: 2000 };
+  function _pace() {
+    const v = localStorage.getItem('nc_pace') || 'fast';
+    return _PACE_MS[v] != null ? v : 'fast';
+  }
+  const _PASSTHROUGH = new Set([
+    'state_replay', 'project_snapshot', 'session_replay',
+    'sessions_snapshot', 'command_result', 'connect_required',
+    'connect_ack', 'bridge_shutdown', 'scr_verify_result',
+  ]);
+  let _buf = [];
+  let _bufTimer = null;
+  function _flushBuf() {
+    if (_bufTimer) { clearTimeout(_bufTimer); _bufTimer = null; }
+    const q = _buf; _buf = [];
+    for (const m of q) { try { handleEvent(m); } catch (e) { log('dispatch err: '+e, 'warn'); } }
+  }
+  function _pacedDispatch(msg) {
+    const ms = _PACE_MS[_pace()] || 0;
+    const et = msg && msg.event_type;
+    if (ms === 0 || (et && _PASSTHROUGH.has(et))) {
+      // Large envelopes land immediately; any pending buffered events flush
+      // first so their order is preserved relative to the snapshot.
+      _flushBuf();
+      try { handleEvent(msg); } catch (e) { log('dispatch err: '+e, 'warn'); }
+      return;
+    }
+    _buf.push(msg);
+    if (!_bufTimer) _bufTimer = setTimeout(_flushBuf, ms);
+  }
+  // Expose pace controls for owner.html and the existing admin block
+  // (unused by default; owner.html calls window.nc_setPace('calm')).
+  window.nc_setPace = function (p) {
+    if (!_PACE_MS.hasOwnProperty(p)) return false;
+    localStorage.setItem('nc_pace', p); return true;
+  };
+  window.nc_getPace = _pace;
+
+  ws.onclose = () => {
+    setConn("disconnected");
+    sessionToken = '';
+    sessionPrivilege = '';
+    window.sessionToken = '';
+    window.sessionPrivilege = '';
+    setAuthBadgeFromPrivilege('');
+    if (!authFailedTerminal) scheduleReconnect('socket-close');
+  };
+
+  ws.onerror = () => {
+    log("socket error", "err");
+  };
+}
+
+/* ── Sessions dashboard ── */
+function openSessionsDash() {
+  const tok = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
+  const url = `nightclaw-sessions.html?port=${bridgePort}${tok}`;
+  window.open(url, '_blank', 'width=1100,height=700');
+}
+
+/* ── Admin ── */
+function send(cmd, args) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { log('Not connected', 'err'); return; }
+  const msg = {type: 'admin_command', cmd, args};
+  if (window.sessionToken) msg.session_token = window.sessionToken;
+  else if (authToken) msg.token = authToken;
+  ws.send(JSON.stringify(msg));
+}
+function sendAdminCommand(cmd, args)  { send(cmd, args || {}); }
+function loadHistoricalSession(runId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { log('Not connected', 'err'); return; }
+  const msg = {type: 'session_replay', run_id: runId};
+  if (window.sessionToken) msg.session_token = window.sessionToken;
+  else if (authToken) msg.token = authToken;
+  ws.send(JSON.stringify(msg));
+  // Highlight selected chip
+  document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('hist-selected'));
+  document.querySelectorAll('.hist-item').forEach(el => {
+    if (el.textContent.includes(runId.slice(-8))) el.classList.add('hist-selected');
+  });
+  // Show banner in step panel
+  const banner = document.getElementById('hist-viewing-banner');
+  if (banner) { banner.textContent = '\u2190 viewing: ' + runId; banner.style.display = 'block'; }
+  // Bidirectional: auto-select this session's project in the slug selector
+  const entry = sessionHistory.find(s => s.run_id === runId);
+  if (entry && entry.project_slug) {
+    const sel = document.getElementById('admin-slug-select');
+    if (sel) {
+      // Set selector if the option exists; otherwise leave as-is
+      const opt = [...sel.options].find(o => o.value === entry.project_slug);
+      if (opt) {
+        sel.value = entry.project_slug;
+        _activeProjectFilter = entry.project_slug;
+        log('\u2194 project auto-selected: ' + entry.project_slug, 'dim');
+        renderHistoryStrip();
+      }
+    }
+  }
+  toast('Session loaded', runId.slice(-14), 'info');
+  log('\u21BA session replay requested: ' + runId, 'dim');
+}
+/* ── Slug combobox ── */
+let _slugList = []; // populated from state_replay active_projects
+function populateSlugSelect(projects) {
+  if (!projects || !projects.length) return;
+  _slugList = projects;
+  const sel = document.getElementById('admin-slug-select');
+  if (!sel) return;
+  const prev = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  // Active/blocked first, archived at bottom greyed out
+  const priority = ['active', 'blocked'];
+  const sorted = [
+    ...projects.filter(p => priority.includes((p.status||'').toLowerCase())),
+    ...projects.filter(p => !priority.includes((p.status||'').toLowerCase()))
+  ];
+  sorted.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.slug;
+    const st = (p.status||'').toLowerCase();
+    const badge = p.status ? ` [${p.status}]` : '';
+    opt.textContent = p.slug + badge;
+    if (st === 'archived') opt.style.color = 'var(--text-faint)';
+    sel.appendChild(opt);
+  });
+  const other = document.createElement('option');
+  other.value = '__other__';
+  other.textContent = 'other… (type below)';
+  sel.appendChild(other);
+  // Restore previous selection if still valid, else auto-select first active/blocked
+  if (prev && prev !== '__other__' && [...sel.options].some(o => o.value === prev)) {
+    sel.value = prev;
+  } else {
+    const best = sorted.find(p => priority.includes((p.status||'').toLowerCase()));
+    if (best) sel.value = best.slug;
+  }
+}
+/* Active project filter for session strip — '' means show all */
+let _activeProjectFilter = '';
+
+function onSlugSelectChange(sel) {
+  const manual = document.getElementById('admin-slug');
+  if (sel.value === '__other__') {
+    manual.style.display = '';
+    manual.focus();
+    _activeProjectFilter = '';
+  } else {
+    manual.style.display = 'none';
+    manual.value = '';
+    _activeProjectFilter = sel.value || '';
+    // Request fresh Project State for the selected slug via project_snapshot
+    if (sel.value && sel.value !== '__other__') {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const msg = {type: 'project_snapshot', project_slug: sel.value};
+        if (window.sessionToken) msg.session_token = window.sessionToken;
+        else if (authToken) msg.token = authToken;
+        ws.send(JSON.stringify(msg));
+        log('\u21BB project snapshot requested for: ' + sel.value, 'dim');
+      }
+    }
+    // Re-render session strip filtered to this project
+    renderHistoryStrip();
+  }
+}
+function getAdminSlug() {
+  const sel = document.getElementById('admin-slug-select');
+  const manual = document.getElementById('admin-slug');
+  if (sel && sel.value && sel.value !== '__other__') return sel.value;
+  return manual ? manual.value.trim() : '';
+}
+function clearNotificationsConfirm() {
+  if (!confirm('Archive NOTIFICATIONS.md to audit/ and clear it?\nThis is reversible — the archive is preserved in the audit folder.')) return;
+  sendAdminCommand('clear_notifications');
+}
+function adminArchiveProject() {
+  const s = getAdminSlug();
+  if (!s) { log('Select or enter a slug first', 'warn'); return; }
+  if (!confirm('Mark \'' + s + '\' as archived in ACTIVE-PROJECTS.md?')) return;
+  send('archive_project', {slug: s});
+}
+function adminResign() {
+  const f = document.getElementById('admin-resign-file').value.trim();
+  if (!f) { log('Enter a file path first (e.g. SOUL.md)', 'warn'); return; }
+  send('resign', {file: f});
+}
+function adminValidate() {
+  log('Running validate.sh…', 'dim');
+  send('validate', {});
+}
+function adminSlug(cmd) {
+  const s = getAdminSlug();
+  if (!s) { log('Select or enter a slug first', 'warn'); return; }
+  send(cmd, {slug: s});
+}
+function adminGuide() {
+  const m = document.getElementById('admin-guide').value.trim();
+  if (!m) return;
+  sendAdminCommand('guide', {message: m});
+  document.getElementById('admin-guide').value = '';
+}
+function populatePASelect(items) {
+  const sel = document.getElementById('admin-pa');
+  if (!sel || !items || !items.length) return;
+  const prev = sel.value;
+  sel.innerHTML = '';
+  items.forEach(pa => {
+    const opt = document.createElement('option');
+    opt.value = pa.id;
+    // Label: PA-001 [ACTIVE] — action class short label
+    const statusTag = pa.status && pa.status.toUpperCase() !== 'INACTIVE' ? ` [${pa.status}]` : '';
+    const cls = pa.action_class ? pa.action_class.replace(/-/g,' ') : '';
+    opt.textContent = `${pa.id}${statusTag}${cls ? ' — ' + cls : ''}`;
+    // Tooltip: condition + boundary
+    const tip = [pa.action_class && `Class: ${pa.action_class}`,
+                 pa.condition   && `When: ${pa.condition}`,
+                 pa.boundary    && `Limit: ${pa.boundary}`,
+                 pa.expires && pa.expires !== '—' && `Expires: ${pa.expires}`
+                ].filter(Boolean).join('\n');
+    if (tip) opt.title = tip;
+    if (pa.status && pa.status.toUpperCase() === 'INACTIVE') opt.style.color = 'var(--text-faint)';
+    sel.appendChild(opt);
+  });
+  // Restore previous selection if still valid
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+function adminPA(cmd) {
+  const p = document.getElementById('admin-pa').value.trim() || undefined;
+  if (!p) { log('Select a pre-approval first', 'warn'); return; }
+  send(cmd, {pa_id: p});
+}
+function adminDone() {
+  const raw = document.getElementById('admin-done-line').value.trim();
+  const n = parseInt(raw, 10);
+  if (!raw || isNaN(n) || n < 1) { log('Enter a notification line number first', 'warn'); return; }
+  sendAdminCommand('done', {line: n});
+  document.getElementById('admin-done-line').value = '';
+}
+function adminSlugPriority() {
+  const s = getAdminSlug();
+  const raw = document.getElementById('admin-priority-n').value.trim();
+  const n = parseInt(raw, 10);
+  if (!s) { log('Enter a slug first', 'warn'); return; }
+  if (!raw || isNaN(n) || n < 0) { log('Enter a priority number', 'warn'); return; }
+  send('priority', {slug: s, n});
+  document.getElementById('admin-priority-n').value = '';
+}
+
+/* ── Theme ── */
+(function() {
+  const btn  = document.querySelector('[data-theme-toggle]');
+  const root = document.documentElement;
+  let theme  = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  root.setAttribute('data-theme', theme);
+  function syncIframe(t) {
+    const f = document.getElementById('graph-frame');
+    if (f && f.contentWindow) try { f.contentWindow.postMessage({type:'nc-theme', theme:t}, '*'); } catch {}
+  }
+  document.getElementById('graph-frame').addEventListener('load', () => syncIframe(theme));
+  if (btn) btn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    syncIframe(theme);
+  });
+  document.getElementById('graph-frame').addEventListener('error', () => {
+    document.getElementById('graph-placeholder').style.display = 'flex';
+    document.getElementById('graph-frame').style.display = 'none';
+  });
+})();
+
+/* ── Token restore: window.__ncBridgeToken set by host page (no localStorage) ── */
+
+/* ── Show port in console ── */
+(function() {
+  const el = document.getElementById('console-out');
+  if (el) { const d = el.querySelector('.console-line'); if (d) d.textContent = `Bridge ws://127.0.0.1:${bridgePort}/ws`; }
+})();
+
+_configReady.then(connect);
+
+/* ── Column resize (left and right panel drag handles) ─────────────────────── */
+(function initColResize() {
+  const layout = document.getElementById('layout-grid');
+  const root   = document.documentElement;
+  const STOR_L = 'nc-col-left', STOR_R = 'nc-col-right';
+  const MIN_L = 140, MAX_L = 380, MIN_R = 220, MAX_R = 600;
+
+  // Restore saved widths
+  const savedL = parseInt(localStorage.getItem(STOR_L));
+  const savedR = parseInt(localStorage.getItem(STOR_R));
+  if (savedL) root.style.setProperty('--col-left',  savedL + 'px');
+  if (savedR) root.style.setProperty('--col-right', savedR + 'px');
+
+  function syncDrawerWidth() {
+    const w = parseInt(getComputedStyle(root).getPropertyValue('--col-right')) || 320;
+    const drawer = document.getElementById('console-drawer');
+    if (drawer) drawer.style.width = w + 'px';
+  }
+  syncDrawerWidth();
+
+  function makeDragger(handle, side) {
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      const startX   = e.clientX;
+      const startVal = parseInt(getComputedStyle(root).getPropertyValue(
+        side === 'left' ? '--col-left' : '--col-right')) || (side === 'left' ? 210 : 320);
+
+      function onMove(ev) {
+        const delta = side === 'left' ? ev.clientX - startX : startX - ev.clientX;
+        const next  = Math.min(Math.max(startVal + delta,
+          side === 'left' ? MIN_L : MIN_R),
+          side === 'left' ? MAX_L : MAX_R);
+        root.style.setProperty(side === 'left' ? '--col-left' : '--col-right', next + 'px');
+        // Keep resize handle positions in sync
+        document.querySelector('.col-resizer-left').style.left  = '';
+        document.querySelector('.col-resizer-right').style.right = '';
+        if (side === 'right') syncDrawerWidth();
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        const val = parseInt(getComputedStyle(root).getPropertyValue(
+          side === 'left' ? '--col-left' : '--col-right'));
+        localStorage.setItem(side === 'left' ? STOR_L : STOR_R, val);
+        if (side === 'right') syncDrawerWidth();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  }
+
+  makeDragger(document.getElementById('resizer-left'),  'left');
+  makeDragger(document.getElementById('resizer-right'), 'right');
+})();
+
+/* ── Center tab bar (Audit Feed / Data Flow) ─────────────────────────────── */
+function switchCenterTab(tab) {
+  const graphPane    = document.getElementById('center-graph-pane');
+  const auditWrap    = document.getElementById('audit-feed-wrap');
+  const consoleWrap  = document.getElementById('console-tab-wrap');
+  const auditFeed    = document.getElementById('audit-feed');
+  const consoleOut   = document.getElementById('console-out');
+  const btnAudit     = document.getElementById('tab-btn-audit');
+  const btnGraph     = document.getElementById('tab-btn-graph');
+  const btnConsole   = document.getElementById('tab-btn-console');
+  if (!graphPane || !auditWrap) return;
+  // Hide all panes
+  graphPane.classList.add('hidden');
+  auditWrap.style.display = 'none';
+  if (consoleWrap) consoleWrap.style.display = 'none';
+  // Clear active tabs
+  [btnAudit, btnGraph, btnConsole].forEach(b => b && b.classList.remove('active'));
+  if (tab === 'audit') {
+    auditWrap.style.display = 'block';
+    if (btnAudit) btnAudit.classList.add('active');
+    if (auditFeed) auditFeed.scrollTop = auditFeed.scrollHeight;
+  } else if (tab === 'console') {
+    if (consoleWrap) { consoleWrap.style.display = 'flex'; }
+    if (btnConsole) btnConsole.classList.add('active');
+    if (consoleOut) consoleOut.scrollTop = consoleOut.scrollHeight;
+  } else {
+    // graph (default)
+    graphPane.classList.remove('hidden');
+    if (btnGraph) btnGraph.classList.add('active');
+  }
+  try { localStorage.setItem('nc-center-tab', tab); } catch(e){}
+}
+// Restore saved tab on load
+(function() {
+  const saved = localStorage.getItem('nc-center-tab') || 'graph';
+  switchCenterTab(saved);
+})();
+
+/* ── Console tab: live line counter ────────────────────────────────────── */
+(function() {
+  const out = document.getElementById('console-out');
+  const counter = document.getElementById('console-line-count');
+  if (out && counter) {
+    new MutationObserver(() => {
+      const n = out.querySelectorAll('.console-line').length;
+      counter.textContent = n > 0 ? n + ' lines' : '';
+    }).observe(out, { childList: true, subtree: true });
+  }
+})();
+
+/* ── Project State HUD toggle ── */
+function toggleProjectHUD() {
+  const hud  = document.getElementById('ps-hud');
+  const drop = document.getElementById('ps-dropdown');
+  if (!drop) return;
+  const isOpen = drop.style.display !== 'none';
+  drop.style.display = isOpen ? 'none' : 'block';
+  if (hud) hud.classList.toggle('open', !isOpen);
+}
+document.addEventListener('click', function(e) {
+  const hud  = document.getElementById('ps-hud');
+  const drop = document.getElementById('ps-dropdown');
+  if (!drop || drop.style.display === 'none') return;
+  if (!hud.contains(e.target) && !drop.contains(e.target)) {
+    drop.style.display = 'none';
+    if (hud) hud.classList.remove('open');
+  }
+});
+
+/* ── Collapsible right-panel sections ─────────────────────────────────────── */
+(function initCollapsibles() {
+  const STOR = 'nc-sec-collapse';
+  let collapsed = {};
+  try { collapsed = JSON.parse(localStorage.getItem(STOR) || '{}'); } catch(e){}
+
+  document.querySelectorAll('.panel-section-head[data-sec]').forEach(head => {
+    const sec = head.dataset.sec;
+    const body = document.getElementById('sec-body-' + sec);
+    if (!body) return;
+
+    // Restore saved collapse state
+    if (collapsed[sec]) {
+      head.classList.add('collapsed');
+      body.classList.remove('open');
+      body.style.maxHeight = '0px';
+    } else {
+      body.classList.add('open');
+      body.style.maxHeight = 'none'; // Fix 1: not pixel-locked, content can grow freely
+    }
+
+    head.addEventListener('click', function(e) {
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      const isOpen = body.classList.contains('open');
+      if (isOpen) {
+        // Snap to pixel height first so CSS transition can animate to 0
+        body.style.maxHeight = body.scrollHeight + 'px';
+        body.offsetHeight; // force reflow
+        body.classList.remove('open');
+        requestAnimationFrame(() => { body.style.maxHeight = '0px'; });
+        head.classList.add('collapsed');
+        collapsed[sec] = true;
+      } else {
+        const target = body.scrollHeight;
+        body.style.maxHeight = target + 'px';
+        body.classList.add('open');
+        head.classList.remove('collapsed');
+        body.addEventListener('transitionend', function onEnd() {
+          body.removeEventListener('transitionend', onEnd);
+          if (body.classList.contains('open')) {
+            body.style.maxHeight = 'none'; // Fix 1: release pixel lock after animation
+          }
+        }, { once: true });
+        collapsed[sec] = false;
+      }
+      try { localStorage.setItem(STOR, JSON.stringify(collapsed)); } catch(e){}
+    });
+  });
+})();
+</script>
+</body>
+</html>
+
+

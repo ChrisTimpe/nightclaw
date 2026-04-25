@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NightClaw · Data Flow</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg:#0f0f0e; --surface:#161614; --surface-2:#1c1b19; --surface-3:#222120;
+    --border:rgba(255,255,255,0.08); --border-hi:rgba(255,255,255,0.14);
+    --text:#c8c6c2; --text-muted:#6e6c69; --text-faint:#3a3937;
+    --accent:#3d9e8c; --accent-hi:#4fb8a3; --accent-dim:rgba(61,158,140,0.15);
+    --ok:#4a9e5c; --warn:#c8893a; --err:#b85b5b;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --trace: #5ec7ff;
+    --trace-dim: rgba(94,199,255,0.18);
+  }
+  [data-theme="light"] {
+    --bg:#f5f4f0; --surface:#ffffff; --surface-2:#f9f8f5; --surface-3:#f0ede8;
+    --border:rgba(0,0,0,0.09); --border-hi:rgba(0,0,0,0.15);
+    --text:#1e1c19; --text-muted:#7a7874; --text-faint:#bab8b4;
+    --accent:#0a7a6a; --accent-hi:#0d9a84; --accent-dim:rgba(10,122,106,0.1);
+    --ok:#2d7a3a; --warn:#a06820; --err:#943030;
+    --trace:#0a7a9a; --trace-dim:rgba(10,122,154,0.14);
+  }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:var(--font-mono); font-size:11px; line-height:1.4; overflow:hidden; }
+  #stage { width:100%; height:100%; display:block; }
+  .band-label { fill:var(--text-muted); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; font-weight:600; }
+  .title-label { fill:var(--text-muted); font-size:10px; letter-spacing:.14em; text-transform:uppercase; font-weight:600; }
+  .run-label { fill:var(--text-faint); font-size:9.5px; letter-spacing:.08em; }
+
+  /* Node base */
+  .node rect.node-bg {
+    fill: var(--surface-2);
+    stroke: var(--border-hi);
+    stroke-width: 1;
+    rx: 3; ry: 3;
+    transition: fill .25s, stroke .25s, filter .25s;
+  }
+  .node text.node-title { fill: var(--text); font-size:10.5px; font-weight:600; letter-spacing:.02em; }
+  .node text.node-sub   { fill: var(--text-muted); font-size:9.5px; letter-spacing:.01em; }
+  .node circle.status-dot { fill: var(--text-faint); r:2.6; }
+
+  /* Active node (current step) — highlighted */
+  .node.active rect.node-bg {
+    fill: var(--accent-dim);
+    stroke: var(--accent-hi);
+    stroke-width: 1.4;
+    filter: drop-shadow(0 0 8px rgba(79, 184, 163, 0.25));
+  }
+  .node.active text.node-title { fill: var(--accent-hi); }
+  .node.active circle.status-dot { fill: var(--accent-hi); r:3.2; }
+
+  /* Edges */
+  .edge {
+    stroke: var(--border-hi);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.55;
+  }
+  .edge.trace-on {
+    stroke: var(--trace);
+    stroke-width: 1.6;
+    opacity: 0.95;
+    filter: drop-shadow(0 0 4px rgba(94, 199, 255, 0.4));
+    stroke-dasharray: 4 3;
+    animation: dashmove 1.2s linear infinite;
+  }
+  @keyframes dashmove { to { stroke-dashoffset: -14; } }
+  .arrowhead { fill: var(--border-hi); }
+  .arrowhead.trace { fill: var(--trace); }
+
+  /* Legend */
+  .legend-box { fill: var(--surface); stroke: var(--border); rx:3; ry:3; }
+  .legend-text { fill: var(--text-muted); font-size:9.5px; letter-spacing:.02em; }
+  .legend-dot.active { fill: var(--accent-hi); }
+  .legend-dot.flow   { fill: var(--trace); }
+  .legend-dot.live   { fill: var(--ok); }
+</style>
+</head>
+<body data-theme="dark">
+<svg id="stage" viewBox="0 0 1100 740" preserveAspectRatio="xMidYMid meet" aria-label="NightClaw Data Flow">
+  <defs>
+    <marker id="ah-default" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path class="arrowhead" d="M0,0 L8,4 L0,8 Z"></path>
+    </marker>
+    <marker id="ah-trace" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path class="arrowhead trace" d="M0,0 L8,4 L0,8 Z"></path>
+    </marker>
+  </defs>
+
+  <!-- Title row -->
+  <text class="title-label" x="40"  y="36">NIGHTCLAW · DATA FLOW</text>
+  <text id="run-label"  class="run-label" x="1060" y="36" text-anchor="end">—</text>
+
+  <!-- ── BAND 1: GOVERNANCE ── -->
+  <text class="band-label" x="40" y="92">GOVERNANCE</text>
+  <line x1="40" y1="100" x2="1060" y2="100" stroke="var(--border)" stroke-width="1"/>
+
+  <!-- registry -->
+  <g class="node" id="n-registry" transform="translate(110,120)">
+    <rect class="node-bg" width="180" height="52"/>
+    <circle class="status-dot" cx="168" cy="12"/>
+    <text class="node-title" x="12" y="20">REGISTRY</text>
+    <text class="node-sub"   x="12" y="38">source-of-truth</text>
+  </g>
+
+  <!-- lock -->
+  <g class="node" id="n-lock" transform="translate(320,120)">
+    <rect class="node-bg" width="180" height="52"/>
+    <circle class="status-dot" cx="168" cy="12"/>
+    <text class="node-title" x="12" y="20">LOCK.md</text>
+    <text class="node-sub"   x="12" y="38">session mutex</text>
+  </g>
+
+  <!-- integrity -->
+  <g class="node" id="n-integrity" transform="translate(530,120)">
+    <rect class="node-bg" width="200" height="52"/>
+    <circle class="status-dot" cx="188" cy="12"/>
+    <text class="node-title" x="12" y="20">INTEGRITY MANIFEST</text>
+    <text class="node-sub"   x="12" y="38">protected-file hashes</text>
+  </g>
+
+  <!-- approval-chain -->
+  <g class="node" id="n-approval-chain" transform="translate(760,120)">
+    <rect class="node-bg" width="190" height="52"/>
+    <circle class="status-dot" cx="178" cy="12"/>
+    <text class="node-title" x="12" y="20">APPROVAL-CHAIN</text>
+    <text class="node-sub"   x="12" y="38">PA invocations</text>
+  </g>
+
+  <!-- check-lock (read-only op) and hardlines (policy doc) — small pills on far edges -->
+  <g class="node" id="n-check-lock" transform="translate(40,252)">
+    <rect class="node-bg" width="120" height="40"/>
+    <text class="node-title" x="10" y="17">check-lock</text>
+    <text class="node-sub"   x="10" y="32">startup read</text>
+  </g>
+  <g class="node" id="n-hardlines" transform="translate(980,252)">
+    <rect class="node-bg" width="80" height="40"/>
+    <text class="node-title" x="10" y="17">HARDLINES</text>
+    <text class="node-sub"   x="10" y="32">policy</text>
+  </g>
+
+  <!-- ── BAND 2: ORCHESTRATION ── -->
+  <text class="band-label" x="40" y="222">ORCHESTRATION</text>
+  <line x1="40" y1="230" x2="1060" y2="230" stroke="var(--border)" stroke-width="1"/>
+
+  <g class="node" id="n-ops-py" transform="translate(180,252)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">ops.py</text>
+    <text class="node-sub"   x="12" y="38">tier gate · T0–T9</text>
+  </g>
+  <g class="node" id="n-active-projects" transform="translate(380,252)">
+    <rect class="node-bg" width="190" height="52"/>
+    <circle class="status-dot" cx="178" cy="12"/>
+    <text class="node-title" x="12" y="20">ACTIVE-PROJECTS</text>
+    <text class="node-sub"   x="12" y="38">dispatch index</text>
+  </g>
+  <g class="node" id="n-longrunner" transform="translate(600,252)">
+    <rect class="node-bg" width="180" height="52"/>
+    <circle class="status-dot" cx="168" cy="12"/>
+    <text class="node-title" x="12" y="20">LONGRUNNER.md</text>
+    <text class="node-sub"   x="12" y="38">phase · pass state</text>
+  </g>
+  <g class="node" id="n-idle-cycle" transform="translate(810,252)">
+    <rect class="node-bg" width="150" height="52"/>
+    <circle class="status-dot" cx="138" cy="12"/>
+    <text class="node-title" x="12" y="20">IDLE-CYCLE</text>
+    <text class="node-sub"   x="12" y="38">notif sweep</text>
+  </g>
+
+  <!-- preapproval sits between governance and orchestration on right -->
+  <g class="node" id="n-preapproval" transform="translate(760,180)">
+    <rect class="node-bg" width="190" height="42"/>
+    <text class="node-title" x="12" y="17">PREAPPROVAL</text>
+    <text class="node-sub"   x="12" y="32">PA-NNN · scoped consent</text>
+  </g>
+
+  <!-- ── BAND 3: EXECUTION ── -->
+  <text class="band-label" x="40" y="362">EXECUTION</text>
+  <line x1="40" y1="370" x2="1060" y2="370" stroke="var(--border)" stroke-width="1"/>
+
+  <g class="node" id="n-tool-status" transform="translate(60,392)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">TOOL-STATUS</text>
+    <text class="node-sub"   x="12" y="38">T3 tool gate</text>
+  </g>
+  <g class="node" id="n-project-outputs" transform="translate(260,392)">
+    <rect class="node-bg" width="180" height="52"/>
+    <circle class="status-dot" cx="168" cy="12"/>
+    <text class="node-title" x="12" y="20">PROJECT OUTPUTS</text>
+    <text class="node-sub"   x="12" y="38">T4 artifacts</text>
+  </g>
+  <g class="node" id="n-quality-standard" transform="translate(470,392)">
+    <rect class="node-bg" width="180" height="52"/>
+    <circle class="status-dot" cx="168" cy="12"/>
+    <text class="node-title" x="12" y="20">QUALITY STANDARD</text>
+    <text class="node-sub"   x="12" y="38">T5 validate</text>
+  </g>
+  <g class="node" id="n-notifications" transform="translate(680,392)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">NOTIFICATIONS</text>
+    <text class="node-sub"   x="12" y="38">queued · holds</text>
+  </g>
+  <g class="node" id="n-failure-modes" transform="translate(880,392)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">FAILURE-MODES</text>
+    <text class="node-sub"   x="12" y="38">T7c recovery</text>
+  </g>
+
+  <!-- ── BAND 4: AUDIT + LEARNING ── -->
+  <text class="band-label" x="40" y="500">AUDIT + LEARNING</text>
+  <line x1="40" y1="508" x2="1060" y2="508" stroke="var(--border)" stroke-width="1"/>
+
+  <g class="node" id="n-audit-log" transform="translate(80,530)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">AUDIT-LOG</text>
+    <text class="node-sub"   x="12" y="38">append-only</text>
+  </g>
+  <g class="node" id="n-session-reg" transform="translate(270,530)">
+    <rect class="node-bg" width="180" height="52"/>
+    <circle class="status-dot" cx="168" cy="12"/>
+    <text class="node-title" x="12" y="20">SESSION-REGISTRY</text>
+    <text class="node-sub"   x="12" y="38">RUN-IDs · outcomes</text>
+  </g>
+  <g class="node" id="n-change-log" transform="translate(470,530)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">CHANGE-LOG</text>
+    <text class="node-sub"   x="12" y="38">field mutations</text>
+  </g>
+  <g class="node" id="n-memory-daily" transform="translate(660,530)">
+    <rect class="node-bg" width="170" height="52"/>
+    <circle class="status-dot" cx="158" cy="12"/>
+    <text class="node-title" x="12" y="20">MEMORY DAILY</text>
+    <text class="node-sub"   x="12" y="38">YYYY-MM-DD.md</text>
+  </g>
+  <g class="node" id="n-lessons" transform="translate(850,530)">
+    <rect class="node-bg" width="160" height="52"/>
+    <circle class="status-dot" cx="148" cy="12"/>
+    <text class="node-title" x="12" y="20">LESSONS</text>
+    <text class="node-sub"   x="12" y="38">T7d distilled</text>
+  </g>
+
+  <!-- second audit row: knowledge + manager-review-reg -->
+  <g class="node" id="n-knowledge" transform="translate(80,598)">
+    <rect class="node-bg" width="170" height="42"/>
+    <text class="node-title" x="12" y="17">KNOWLEDGE</text>
+    <text class="node-sub"   x="12" y="32">T7 accreted</text>
+  </g>
+  <g class="node" id="n-manager-review-reg" transform="translate(270,598)">
+    <rect class="node-bg" width="220" height="42"/>
+    <text class="node-title" x="12" y="17">MANAGER-REVIEW-REGISTRY</text>
+    <text class="node-sub"   x="12" y="32">verdicts · T3 ↔ T7</text>
+  </g>
+
+  <!-- ───────── EDGES ───────── -->
+  <!-- Governance → Orchestration -->
+  <path class="edge" id="e-registry-ops"          d="M200,172 C200,210 265,218 265,252" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-lock-ops"              d="M410,172 C410,210 285,222 285,252" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-integrity-ops"         d="M630,172 C630,210 320,222 320,252" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-approvalchain-preap"   d="M855,172 C855,176 855,178 855,180" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-preap-activeproj"     d="M810,222 C700,240 560,240 500,252" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-checklock-ops"         d="M160,272 L180,275" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-hardlines-ops"         d="M980,272 C900,285 500,282 350,278" marker-end="url(#ah-default)"/>
+
+  <!-- Orchestration internal -->
+  <path class="edge" id="e-ops-activeproj"        d="M350,278 L380,278" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-activeproj-longrunner" d="M570,278 L600,278" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-longrunner-idle"       d="M780,278 L810,278" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-idle-notif"            d="M885,304 C885,340 765,360 765,392" marker-end="url(#ah-default)"/>
+
+  <!-- Orchestration → Execution -->
+  <path class="edge" id="e-ops-toolstatus"        d="M200,304 C170,340 145,370 145,392" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-longrunner-projout"    d="M650,304 C500,340 350,360 350,392" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-longrunner-quality"    d="M700,304 C650,340 560,360 560,392" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-activeproj-notif"      d="M475,304 C560,340 700,360 765,392" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-ops-failuremodes"      d="M310,304 C620,340 920,360 965,392" marker-end="url(#ah-default)"/>
+
+  <!-- Execution → Audit -->
+  <path class="edge" id="e-toolstatus-auditlog"   d="M145,444 C145,490 165,510 165,530" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-projout-changelog"     d="M350,444 C400,490 520,510 555,530" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-quality-sessionreg"    d="M560,444 C520,490 400,510 360,530" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-notif-memory"          d="M765,444 C760,490 745,510 745,530" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-failmodes-lessons"     d="M965,444 C965,490 935,510 930,530" marker-end="url(#ah-default)"/>
+
+  <!-- Audit cross-refs -->
+  <path class="edge" id="e-auditlog-sessionreg"   d="M250,556 L270,556" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-sessionreg-changelog"  d="M450,556 L470,556" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-changelog-memory"      d="M640,556 L660,556" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-memory-lessons"        d="M830,556 L850,556" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-knowledge-mgrreview"   d="M250,619 L270,619" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-lessons-knowledge"     d="M930,582 C600,640 280,640 165,640" marker-end="url(#ah-default)"/>
+  <path class="edge" id="e-mgrreview-activeproj"  d="M380,598 C380,500 430,330 475,304" marker-end="url(#ah-default)"/>
+
+  <!-- Legend -->
+  <g transform="translate(830,680)">
+    <rect class="legend-box" x="0" y="0" width="230" height="44"/>
+    <circle class="legend-dot active" cx="14" cy="15" r="3.5"/>
+    <text class="legend-text" x="26" y="18">active step</text>
+    <circle class="legend-dot flow" cx="14" cy="33" r="3.5"/>
+    <text class="legend-text" x="26" y="36">data flow</text>
+    <circle class="legend-dot live" cx="120" cy="15" r="3.5"/>
+    <text class="legend-text" x="132" y="18">live</text>
+  </g>
+</svg>
+
+<script>
+  // Node id → which step(s) make it active.
+  // Mirrors STEP_GRAPH_MAP in nightclaw-monitor.html. Source of truth is still the parent.
+  const STEP_NODES = {
+    startup: ['ops-py','integrity','check-lock','lock','hardlines','registry'],
+    T0:      ['ops-py','audit-log','session-reg'],
+    T1:      ['ops-py','active-projects','longrunner','notifications','idle-cycle'],
+    T2:      ['ops-py','longrunner','active-projects','notifications','preapproval','approval-chain'],
+    T3:      ['ops-py','tool-status','active-projects'],
+    T4:      ['ops-py','longrunner','audit-log','project-outputs','change-log','failure-modes'],
+    T5:      ['ops-py','longrunner','quality-standard','notifications'],
+    T6:      ['ops-py','registry','longrunner','active-projects','audit-log','change-log'],
+    T7:      ['ops-py','failure-modes','lessons','knowledge','tool-status','memory-daily'],
+    T8:      ['ops-py','audit-log','registry','notifications','manager-review-reg'],
+    T9:      ['ops-py','session-reg','memory-daily','lock','audit-log','change-log'],
+  };
+
+  // For each step, which edges should light up as "trace" (directed flow for that step).
+  // Keep this narrow — only edges strictly involved. Everything else stays dim.
+  const STEP_EDGES = {
+    startup: ['e-registry-ops','e-lock-ops','e-integrity-ops','e-checklock-ops','e-hardlines-ops'],
+    T0:      ['e-ops-toolstatus','e-toolstatus-auditlog','e-auditlog-sessionreg'],
+    T1:      ['e-ops-activeproj','e-activeproj-longrunner','e-longrunner-idle','e-idle-notif'],
+    T2:      ['e-ops-activeproj','e-activeproj-longrunner','e-activeproj-notif','e-approvalchain-preap','e-preap-activeproj'],
+    T3:      ['e-ops-activeproj','e-ops-toolstatus'],
+    T4:      ['e-longrunner-projout','e-projout-changelog','e-ops-failuremodes','e-toolstatus-auditlog'],
+    T5:      ['e-longrunner-quality','e-activeproj-notif','e-quality-sessionreg'],
+    T6:      ['e-registry-ops','e-ops-activeproj','e-activeproj-longrunner','e-projout-changelog','e-toolstatus-auditlog'],
+    T7:      ['e-ops-failuremodes','e-failmodes-lessons','e-lessons-knowledge','e-notif-memory'],
+    T8:      ['e-registry-ops','e-activeproj-notif','e-toolstatus-auditlog','e-mgrreview-activeproj'],
+    T9:      ['e-lock-ops','e-auditlog-sessionreg','e-changelog-memory','e-memory-lessons'],
+  };
+
+  function clearState() {
+    document.querySelectorAll('.node.active').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.edge.trace-on').forEach(e => {
+      e.classList.remove('trace-on');
+      e.setAttribute('marker-end','url(#ah-default)');
+    });
+  }
+
+  function applyHighlight(step, nodes) {
+    clearState();
+    const effective = nodes && nodes.length ? nodes : (STEP_NODES[step] || []);
+    effective.forEach(nid => {
+      const el = document.getElementById('n-' + nid);
+      if (el) el.classList.add('active');
+    });
+    (STEP_EDGES[step] || []).forEach(eid => {
+      const e = document.getElementById(eid);
+      if (e) {
+        e.classList.add('trace-on');
+        e.setAttribute('marker-end','url(#ah-trace)');
+      }
+    });
+  }
+
+  function applyTheme(theme) {
+    document.body.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+  }
+
+  // Parent <-> iframe protocol (matches nightclaw-monitor.html lines 847 & 1276):
+  //   { type: 'nc-highlight', step, nodes }
+  //   { type: 'nc-theme', theme }
+  window.addEventListener('message', (ev) => {
+    const d = ev.data || {};
+    if (d.type === 'nc-highlight') {
+      applyHighlight(d.step, d.nodes);
+      // Update run label if provided
+      if (d.run) document.getElementById('run-label').textContent = d.run;
+    } else if (d.type === 'nc-theme') {
+      applyTheme(d.theme);
+    }
+  });
+
+  // Initial idle state: show ops.py pulsing faintly so the panel isn't dead on load.
+  document.getElementById('n-ops-py').classList.add('active');
+</script>
+</body>
+</html>

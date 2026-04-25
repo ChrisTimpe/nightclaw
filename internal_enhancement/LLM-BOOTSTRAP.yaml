@@ -1,0 +1,564 @@
+# LLM-BOOTSTRAP.yaml — declarative bootstrap tracks for new LLM maintainer sessions.
+#
+# PURPOSE
+# -------
+# A new LLM or engineer dropped into this repo must be able to get productive
+# quickly without reading 10,000+ lines of doctrine. The `bootstrap` command
+# projects a curated, deterministic view of the repo by resolving the set of
+# sections declared in one of the tracks below.
+#
+# This file is INTENTIONALLY OUTSIDE ``orchestration-os/schema/``. The schema
+# fingerprint only hashes files under ``schema/``; the bootstrap manifest is
+# NOT part of the schema and MUST NOT rotate the fingerprint when edited.
+# Pass 10 treats this file as the authoritative declarative source for
+# bootstrap tracks, but it is projection metadata, not schema.
+#
+# SCHEMA (self-describing — validated by tests/core/test_bootstrap.py)
+# --------------------------------------------------------------------
+# version     : int                                     (schema version)
+# defaults    : object
+#   budget_tokens  : int                                (default token ceiling)
+#   format         : "md" | "json"                      (default output format)
+# resolvers   : list[resolver_name]                     (names registered in
+#                                                       RESOLVERS in
+#                                                       nightclaw_engine/
+#                                                       commands/bootstrap.py)
+# tracks      : object[track_name -> track]
+#   track:
+#     summary      : str                                (one-line description)
+#     sections     : list[section]
+#     section:
+#       resolver      : str                             (must be in `resolvers`)
+#       args          : object                          (resolver-specific)
+#       required      : bool    (default true)          (if false, missing
+#                                                       source is skipped, not
+#                                                       an error)
+#       budget_share  : int     (default 100)           (relative weight when
+#                                                       apportioning the
+#                                                       overall budget)
+#
+# BUDGET SEMANTICS
+# ----------------
+# Tokens are approximated by character-count / 4 (tiktoken is not installed in
+# the runtime environment; see DECISIONS.md). Each section's share of the
+# overall budget is ``section.budget_share / sum(track.sections.budget_share)``
+# of ``budget_tokens``. Sections that overflow their share are truncated with
+# a trailing ``… [truncated N chars]`` marker. The provenance footer lists
+# every source consumed with its uncut character count, so nothing is hidden.
+
+version: 1
+
+defaults:
+  budget_tokens: 12000
+  format: md
+
+# Whitelist of resolver names that sections may reference. The bootstrap
+# command imports RESOLVERS from nightclaw_engine/commands/bootstrap.py and
+# verifies every track section's resolver is in this list AND present in
+# RESOLVERS. A CI invariant (test_bootstrap_resolvers_match_manifest) keeps
+# the two lists in sync.
+resolvers:
+  - summary          # Renders a compact repo summary: what is nightclaw, tiers, counts.
+  - topology         # Runtime + telemetry topology (ASCII graphs from internal_enhancement/ARCHITECTURE.md).
+  - doctrine         # Loads a specific doctrine .md file from the repo.
+  - cron_hardlines   # Loads orchestration-os/CRON-HARDLINES.md unchanged.
+  - bundles          # Projects SchemaModel.bundles as a human-readable table.
+  - invariants       # Harvests @invariant: annotations from tests/ and renders a catalog.
+  - gate_sequence    # Enumerates the 5 CI exit gates + their commands + expected output shape.
+  - known_issues     # Inlines the "Known issues" section of internal_enhancement/CURRENT-PASS.md.
+  - dependency_graph # Projects SchemaModel.edges as a DOT-like listing.
+  - file             # Reads an arbitrary file (subject to path sanity checks).
+  - prose            # Inlines a literal string block from this YAML.
+
+tracks:
+  # --------------------------------------------------------------------
+  # general — the default track. Answers: "what is this repo, how do I
+  # navigate it, what must I not break, what are the gates."
+  # --------------------------------------------------------------------
+  general:
+    summary: "Default onboarding: repo model, tiers, invariants, gate sequence."
+    sections:
+      - resolver: summary
+        budget_share: 80
+      - resolver: prose
+        args:
+          heading: "You are here"
+          body: |
+            You are an LLM assistant working in an agent session with bash +
+            the full repo at /home/user/workspace/ (or equivalent
+            checkout root). The architecture is "prose for reasoning, tools
+            for guarantees": Markdown doctrine is what you read; the engine's
+            deterministic commands (nightclaw-ops.py …) are what you use to
+            mutate state. YAML under orchestration-os/schema/ is the single
+            source of truth — REGISTRY.md is a rendered projection, not a
+            datastore.
+        budget_share: 40
+      - resolver: topology
+        budget_share: 120
+      - resolver: doctrine
+        args: { path: "AGENTS-CORE.md" }
+        required: false
+        budget_share: 160
+      - resolver: cron_hardlines
+        budget_share: 120
+      - resolver: prose
+        args:
+          heading: "Six non-negotiables"
+          body: |
+            This repo operates under six locked non-negotiables. Every pass
+            (including small doc-only passes) is reviewed against these.
+
+            1. No changes to any tool output string (byte-stable contracts).
+            2. No edits to cron prompts (CRON-HARDLINES, CRON-WORKER-PROMPT,
+               CRON-MANAGER-PROMPT — the "it already works" constraint).
+            3. ``schema-sync`` must stay NOOP — or become NOOP after exactly
+               one deliberate schema edit with a stated rationale.
+            4. No bundle protocol change (R5 ARGS/GUARDS/MUTATES shape
+               preserved).
+            5. No state-file format change.
+            6. SCR-09 stays tight — prompt args match bundle args.
+
+            If a proposed change violates any of the six, stop and escalate
+            before editing. Doctrine pass (review_pr track) has the full
+            review checklist.
+        budget_share: 120
+      - resolver: invariants
+        budget_share: 200
+      - resolver: gate_sequence
+        budget_share: 80
+      - resolver: known_issues
+        budget_share: 200
+      - resolver: prose
+        args:
+          heading: "What this bootstrap does NOT tell you, and how to find it"
+          body: |
+            The sections above give you doctrine, tiers, invariants, gates,
+            and known issues. They are deliberately incomplete. Here is what
+            is outside their scope and where the answer actually lives:
+
+            • Full repo tree — R3 (orchestration-os/schema/routing.yaml)
+              catalogs engine-mutated files only (~85 rows). Top-level docs
+              (README, ARCHITECTURE, HEARTBEAT, TOOLS, INSTALL, DEPLOY,
+              WORKING, SECURITY,
+              CONTRIBUTING, GUEST-SETUP, REGISTRY.generated), and several
+              orchestration-os prose files (START-HERE, ORCHESTRATOR,
+              OPS-CRON-SETUP, OPS-IDLE-CYCLE, OPS-PASS-LOG-FORMAT,
+              LONGRUNNER-TEMPLATE, PROJECT-SCHEMA-TEMPLATE, TOOL-STATUS,
+              schema/README) are NOT in R3. To enumerate the tree, use
+              ``git ls-files`` or ``find . -type f -name '*.md'``.
+
+            • Function-level write mapping — R3 maps file → bundle/command.
+              R4 (schema/edges.yaml) maps file/bundle → file. Neither maps
+              Python function → file. To find which function writes file X:
+              ``grep -rn "write_text\\|open.*['\"][wa]" nightclaw_engine/``
+              combined with ``grep -rn "<filename>" nightclaw_engine/``.
+              This is escalation only — prefer bundle-exec for any real
+              state mutation.
+
+            • Downstream / upstream dependencies — R4 edges.yaml (74 edges,
+              typed READS/WRITES/VALIDATES/TRIGGERS/REFERENCES/AUTHORIZES)
+              is bidirectionally queryable by source OR target. The
+              ``dependency_graph`` resolver exists but the ``general`` track
+              does not call it to stay under budget. Run
+              ``nightclaw-ops.py bootstrap --track add_bundle`` (or
+              ``fix_bug``) to see it inlined, or read edges.yaml directly.
+
+            • Protected files (SOUL, USER, IDENTITY, MEMORY, AGENTS-CORE,
+              the cron prompts, OPS-PREAPPROVAL, OPS-AUTONOMOUS-SAFETY,
+              CRON-HARDLINES, REGISTRY) — these are listed in
+              PROTECTED_PATHS (nightclaw_engine/commands/_shared.py). The
+              engine refuses to write to them. Only {OWNER} edits these.
+              Do NOT confuse "blank by design" with "missing" — see the
+              2026.4.16 release note in audit/INTEGRITY-MANIFEST.md.
+
+            • Prior pass history and prior-engineer findings — see
+              ``audit/CHANGE-LOG.md`` for the field-level runtime change
+              record and ``git log`` for full commit history. Live-issue
+              surface is ``internal_enhancement/CURRENT-PASS.md``.
+
+            • Monitor runtime topology — the repo ships ONE native
+              local-monitor runtime: the single-process built-in runtime
+              invoked as ``python3 -m nightclaw_bridge --serve --workspace
+              "$PWD"``. That one process serves the HTML pages under
+              ``apps/monitor/``, terminates the ``/ws`` (unified monitor
+              + owner view) and ``/sessions`` WebSockets, and ingests ops
+              events on the UNIX socket ``/tmp/nightclaw-ops.sock`` — all
+              in-process. The browser layer is optional: the NightClaw
+              engine and CLI admin paths run without the bridge or HTML
+              apps, and the monitor tier is a UI over the same audited
+              core. Do NOT confuse this built-in runtime with the
+              "standalone bridge" deployment form — that is a separate, multi-process
+              deployment form (not shipped as a distinct script) intended
+              for richer fan-out setups. Both forms speak WebSocket; the
+              distinction is process topology, not transport.
+              Authoritative internal wording lives in
+              ``internal_enhancement/ARCHITECTURE.md`` §2 (telemetry topology).
+              Public usage wording in ``README.md`` is downstream explanatory
+              material, not protocol authority. Engine code never imports the
+              bridge or monitor packages (INV-15 DAG gate) — the monitor
+              tier is always side-channel.
+        budget_share: 380
+      - resolver: prose
+        args:
+          heading: "Next actions"
+          body: |
+            1. Run the 5 gates (see Gate Sequence) to confirm the tree is green.
+            2. Read internal_enhancement/CURRENT-PASS.md for known issues and
+               current-pass state.
+            3. If you are going to mutate state, use a bundle (bundle-exec)
+               or a typed command — never hand-edit schema YAML or REGISTRY.md
+               outside the <!-- nightclaw:render --> marker bodies.
+        budget_share: 40
+
+  # --------------------------------------------------------------------
+  # extend — task-specific: "I need to add a feature / command / config
+  # file or a new runtime relationship between existing files."
+  # Surfaces the dependency graph first, then routing table, then gates.
+  # This is the mandatory starting track for any extension or
+  # customization work. R4 traversal must precede every write.
+  # --------------------------------------------------------------------
+  extend:
+    summary: "Task track: extending or customizing NightClaw — R4 traversal first."
+    sections:
+      - resolver: prose
+        args:
+          heading: "Task: extend or customize NightClaw"
+          body: |
+            NightClaw is an object model with a typed impact graph. Adding
+            a new feature, command, config file, or runtime relationship
+            requires declaring R4 edges BEFORE writing code. If you skip
+            this step, cascade-read returns CASCADE:NONE for your new file
+            and every future session gets a false "nothing depends on this"
+            answer.
+
+            The extension workflow:
+            1. cascade-read every file you plan to touch (see commands below).
+            2. Declare any new edges in orchestration-os/schema/edges.yaml.
+            3. Run schema-sync to re-render REGISTRY.md.
+            4. Write the code / config / prompt change.
+            5. cascade-read every new file introduced to verify edges are live.
+            6. Run all 5 gates. Re-sign protected files if edited.
+
+            The edge is the contract. The code implements it.
+        budget_share: 80
+      - resolver: dependency_graph
+        budget_share: 300
+      - resolver: prose
+        args:
+          heading: "How to traverse R4"
+          body: |
+            Forward traversal (what does changing this file affect?):
+              python3 scripts/nightclaw-ops.py cascade-read <file>
+
+            Reverse traversal (what reads or depends on this file?):
+              grep '<file>' orchestration-os/schema/edges.yaml
+
+            Both directions must be checked. CASCADE:NONE on a non-isolated
+            file means an edge is missing — declare it first.
+
+            Route check (what tier and bundle governs writes to this file?):
+              python3 scripts/nightclaw-ops.py registry-route <file>
+
+            Field contract check (is a value valid for a given field?):
+              python3 scripts/nightclaw-ops.py validate-field <OBJ> <field> <value>
+        budget_share: 80
+      - resolver: prose
+        args:
+          heading: "Declaring a new R4 edge"
+          body: |
+            Add to orchestration-os/schema/edges.yaml under `edges:`:
+              - { source: "<your-new-file>", type: READS, target: "<config-it-reads>" }
+              - { source: "<prompt-file>",   type: TRIGGERS, target: "<command-it-triggers>" }
+
+            Edge types:
+              READS      — file or command reads data from target at runtime
+              WRITES     — file or command writes to target
+              VALIDATES  — file enforces a hash or contract on target
+              TRIGGERS   — prompt step or event causes target to execute
+              REFERENCES — doc links to target (cross-reference only)
+              AUTHORIZES — file grants permission for target to execute
+
+            After editing edges.yaml, run schema-sync. A new fingerprint
+            means REGISTRY.md R4 was re-rendered. Then re-sign REGISTRY.md.
+        budget_share: 80
+      - resolver: prose
+        args:
+          heading: "R3 routing — every new file needs a row"
+          body: |
+            Every file the agent or engine writes must have an R3 row in
+            orchestration-os/schema/routing.yaml. Every .py file under
+            nightclaw_engine/ must have a CODE-tier row (SCR-10 enforces
+            this; scr-verify will FAIL without it).
+
+            Add to routing.yaml under the appropriate section:
+              - { file: "<path>", tier: STANDARD, bundle: "<bundle-or-standalone>",
+                  note: "<one-line description>" }
+
+            Tiers: PROTECTED, APPEND, STANDARD, MANIFEST-VERIFY, CODE
+            Run schema-sync after editing routing.yaml.
+        budget_share: 60
+      - resolver: gate_sequence
+        budget_share: 80
+      - resolver: invariants
+        budget_share: 200
+      - resolver: prose
+        args:
+          heading: "Checklist before closing the pass"
+          body: |
+            □ cascade-read run on every new file introduced — edges return correctly
+            □ cascade-read run on every modified file — no unexpected CASCADE:NONE
+            □ New R4 edges declared in edges.yaml
+            □ New R3 rows declared in routing.yaml for any new files
+            □ schema-sync run — NOOP on second invocation
+            □ Protected files re-signed if edited
+            □ All 5 gates pass
+            □ skills-sync run if any nightclaw_engine/ .py was added or modified
+        budget_share: 60
+
+  # --------------------------------------------------------------------
+  # add_bundle — task-specific: "I need to add a new bundle." Surfaces
+  # bundles.yaml shape + SCR-09 contract + the framework-probe test.
+  # --------------------------------------------------------------------
+  add_bundle:
+    summary: "Task track: adding a new R5 bundle end-to-end."
+    sections:
+      - resolver: prose
+        args:
+          heading: "Task: add a new bundle"
+          body: |
+            A bundle declares a deterministic state mutation. You declare it
+            in YAML; the engine executes it with no Python changes. This is
+            the "framework contract" enforced by
+            tests/engine_e2e/test_bundle_positive_path.py::test_framework_
+            new_bundle_flows_through_without_code_change.
+        budget_share: 40
+      - resolver: bundles
+        budget_share: 250
+      - resolver: file
+        args: { path: "orchestration-os/schema/bundles.yaml" }
+        budget_share: 300
+      - resolver: invariants
+        args: { filter: "bundle" }
+        budget_share: 120
+      - resolver: prose
+        args:
+          heading: "Procedure"
+          body: |
+            1. Add a new entry under ``bundles:`` in orchestration-os/schema/
+               bundles.yaml following the shape of the existing entries
+               (name, trigger, args, validates, writes, append, returns).
+            2. If your bundle has prompts referenced from the cron files,
+               ensure SCR-09 will still pass (args declared in YAML match
+               args passed in the prompt). Run ``scr-verify``.
+            3. Run ``schema-render`` and ``schema-sync`` — the latter should
+               update REGISTRY.md if your bundle added R5/R3/R4 material.
+            4. Run ``validate-bundles`` — all 8+ bundles must PASS.
+            5. Run the full test suite. The framework-probe test guarantees
+               your new bundle becomes executable without writing Python.
+        budget_share: 80
+
+  # --------------------------------------------------------------------
+  # edit_schema — task-specific: "I need to edit schema YAML." Warns
+  # about fingerprint rotation + CL5 marker bounds + re-sign flow.
+  # --------------------------------------------------------------------
+  edit_schema:
+    summary: "Task track: editing YAML under orchestration-os/schema/."
+    sections:
+      - resolver: prose
+        args:
+          heading: "Task: edit schema YAML"
+          body: |
+            Files under orchestration-os/schema/*.yaml are the single source
+            of truth. Every file in that directory contributes to
+            SchemaModel.fingerprint (SHA-256 over sorted file contents).
+            ANY edit — including formatting — will rotate the fingerprint,
+            which forces schema-sync to re-render the marker bodies in
+            orchestration-os/REGISTRY.md, which forces you to re-sign
+            INTEGRITY-MANIFEST.md.
+        budget_share: 80
+      - resolver: file
+        args: { path: "orchestration-os/schema/objects.yaml" }
+        budget_share: 100
+      - resolver: file
+        args: { path: "orchestration-os/schema/fields.yaml" }
+        budget_share: 100
+      - resolver: file
+        args: { path: "orchestration-os/schema/routing.yaml" }
+        budget_share: 100
+      - resolver: file
+        args: { path: "orchestration-os/schema/edges.yaml" }
+        budget_share: 100
+      - resolver: file
+        args: { path: "orchestration-os/schema/protected.yaml" }
+        budget_share: 60
+      - resolver: file
+        args: { path: "orchestration-os/schema/bundles.yaml" }
+        budget_share: 100
+      - resolver: file
+        args: { path: "orchestration-os/schema/scr_rules.yaml" }
+        budget_share: 80
+      - resolver: invariants
+        args: { filter: "schema" }
+        budget_share: 160
+      - resolver: gate_sequence
+        budget_share: 80
+      - resolver: prose
+        args:
+          heading: "Procedure"
+          body: |
+            1. Make your YAML edit.
+            2. Run ``schema-render`` → ``schema-sync`` → verify
+               ``schema-lint`` prints the new fingerprint and
+               ``schema-sync`` is NOOP on second invocation.
+            3. Run ``scr-verify`` — the thesis invariants in
+               tests/core/test_thesis_alignment.py enforce that no
+               predicate regex-reads REGISTRY.md.
+            4. If your edit touched a PROTECTED path, re-sign via
+               ``bash scripts/resign.sh``.
+            5. Run the full test suite + all 5 gates.
+        budget_share: 80
+
+  # --------------------------------------------------------------------
+  # fix_bug — task-specific: "I need to diagnose/fix a bug." Surfaces
+  # the invariant catalog + gate sequence + most recent pass-summary +
+  # failure-mode doctrine.
+  # --------------------------------------------------------------------
+  fix_bug:
+    summary: "Task track: diagnosing or fixing a bug in the engine."
+    sections:
+      - resolver: prose
+        args:
+          heading: "Task: fix a bug"
+          body: |
+            The engine has a 4-tier truth model: YAML schema (authoritative),
+            Python runtime (typed queries over SchemaModel), Markdown
+            doctrine (LLM input), audit artifacts (deterministic record).
+            Bugs fall into predictable buckets: (a) schema out of date with
+            runtime expectations, (b) predicate regex drifting from rendered
+            prose, (c) a hot-path reading a projection instead of the source.
+            The invariant catalog below encodes the guardrails that fire on
+            these specifically. Read them first.
+        budget_share: 80
+      - resolver: invariants
+        budget_share: 300
+      - resolver: gate_sequence
+        budget_share: 80
+      - resolver: doctrine
+        args: { path: "orchestration-os/OPS-FAILURE-MODES.md" }
+        required: false
+        budget_share: 160
+      - resolver: topology
+        budget_share: 120
+      - resolver: prose
+        args:
+          heading: "Diagnostic flow"
+          body: |
+            1. Run the 5 gates. Note which fails and on what line.
+            2. Map the failure to an invariant (catalog above): each
+               invariant's failure message tells you the remediation.
+            3. If the failure is gate-independent (a bug in behaviour),
+               write a failing test FIRST that reproduces it. The test
+               suite discovers new test_*.py files automatically.
+            4. Fix the code. Re-run the full gate sequence.
+            5. If your fix changed any .py under nightclaw_engine/, run
+               scripts/skills-sync.py — Invariant 8 fails CI otherwise.
+        budget_share: 80
+
+  # --------------------------------------------------------------------
+  # review_pr — "I need to review a PR or pass summary." Projects the
+  # 6 non-negotiables + most recent decisions + invariant list.
+  # --------------------------------------------------------------------
+  review_pr:
+    summary: "Task track: reviewing an engineering change for architectural fit."
+    sections:
+      - resolver: prose
+        args:
+          heading: "Task: review a change"
+          body: |
+            This repo operates under six locked non-negotiables. A change is
+            acceptable ONLY if it honors all six. Everything else — style,
+            elegance, scope — is negotiable.
+        budget_share: 40
+      - resolver: prose
+        args:
+          heading: "Six non-negotiables"
+          body: |
+            1. No changes to any tool output string (byte-stable contracts).
+            2. No edits to cron prompts (CRON-HARDLINES, CRON-WORKER-PROMPT,
+               CRON-MANAGER-PROMPT — the "it already works" constraint).
+            3. ``schema-sync`` must stay NOOP — or become NOOP after exactly
+               one deliberate schema edit with a stated rationale.
+            4. No bundle protocol change (R5 ARGS/GUARDS/MUTATES shape
+               preserved).
+            5. No state-file format change.
+            6. SCR-09 stays tight — prompt args match bundle args.
+        budget_share: 80
+      - resolver: invariants
+        budget_share: 280
+      - resolver: gate_sequence
+        budget_share: 80
+      - resolver: prose
+        args:
+          heading: "Review checklist"
+          body: |
+            - Do all 5 gates pass? If no: reject until they do.
+            - Is any invariant newly satisfied or newly added? Good — record
+              it in the pass summary.
+            - Does any output diff from the baseline? If yes: only line
+              numbers in tracebacks are acceptable drift. Anything else is
+              a non-negotiable violation.
+            - Does the change add a new tool? It MUST appear in
+              commands/__init__.py COMMANDS + STEP_CMD_MAP (covered by
+              test_engine_smoke.py).
+            - Does the change add a new .py under nightclaw_engine/? It
+              MUST be routed (R3 CODE row in routing.yaml; SCR-10 fires
+              otherwise).
+        budget_share: 80
+
+  # --------------------------------------------------------------------
+  # add_predicate — "I need to add a new SCR predicate." Surfaces the
+  # predicate registry + canonical signature + migration pattern.
+  # --------------------------------------------------------------------
+  add_predicate:
+    summary: "Task track: adding a new SCR predicate for a repo invariant."
+    sections:
+      - resolver: prose
+        args:
+          heading: "Task: add an SCR predicate"
+          body: |
+            SCR (Schema Consistency Rules) predicates are deterministic
+            checks that run as part of ``scr-verify``. Every predicate
+            takes ``(model: SchemaModel, root: pathlib.Path)`` and returns
+            an ``ScrReport`` with pass/fail + one-line reason. The thesis
+            invariants (test_thesis_alignment.py) enforce that no
+            predicate may regex-read REGISTRY.md — the model is the data
+            source, REGISTRY.md is a rendered projection.
+        budget_share: 120
+      - resolver: file
+        args: { path: "nightclaw_engine/protocol/integrity.py" }
+        budget_share: 400
+      - resolver: file
+        args: { path: "orchestration-os/schema/scr_rules.yaml" }
+        required: false
+        budget_share: 100
+      - resolver: invariants
+        args: { filter: "predicate|scr|regex" }
+        budget_share: 200
+      - resolver: prose
+        args:
+          heading: "Procedure"
+          body: |
+            1. Add the predicate function to
+               nightclaw_engine/protocol/integrity.py with canonical
+               signature ``pred_NAME(model, root)``. Name must start with
+               ``pred_`` (Invariant 4 enforces signature uniformity).
+            2. Register it in PREDICATE_REGISTRY in the same file.
+            3. Add an SCRRule entry to orchestration-os/schema/scr_rules.
+               yaml with id, severity (LOW/MED/HIGH), predicate name,
+               title.
+            4. Run ``schema-render`` + ``schema-sync`` — SCR section of
+               REGISTRY.md will re-render.
+            5. Add a test covering both PASS and FAIL branches in
+               tests/core/test_scr_predicates.py.
+            6. Run the 5 gates. scr-verify must print your new predicate.
+        budget_share: 80

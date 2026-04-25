@@ -1,0 +1,46 @@
+# Tier C — per-project phase state machine for example-research.
+#
+# Declares the legal phases this project can be in and the legal transitions
+# between them. The engine's phase-validate command consults this file before
+# phase_advance / phase_transition bundles write to LONGRUNNER.md.
+#
+# An unknown phase, an undeclared transition, or a missing file is a hard reject.
+
+slug: example-research
+initial_phase: exploration
+
+phases:
+  exploration:
+    objective: "Identify 3-4 candidate tools per category (note-taking, writing, email, scheduling) through web research and user community signal. No ranking yet — just discovery with basic facts per candidate."
+    stop_condition: "A dated discovery file exists with at least 12 tools across 4 categories, each with: name, URL, pricing model, key AI feature, and one sentence on real-world user sentiment. No fabricated URLs."
+    allowed_tools:
+      - web_search
+      - file_system
+      - python
+    successors:
+      - adversarial-challenge
+
+  adversarial-challenge:
+    objective: "Stress-test the discovery set: surface every tool that was missed, every bias in inclusion criteria, every URL or claim that doesn't survive a second check."
+    stop_condition: "A signed adversarial-review file names at least three additions or rejections with evidence; no URL in the kept set fails verification."
+    allowed_tools:
+      - web_search
+      - file_system
+    successors:
+      - synthesis
+
+  synthesis:
+    objective: "Produce the ranked comparison guide: clustering, trade-offs, honest verdicts, and usage recommendations per category."
+    stop_condition: "A dated shortlist/guide file exists with per-category rankings, trade-off notes, and a decision matrix the target reader can act on."
+    allowed_tools:
+      - file_system
+      - python
+    successors:
+      - publication
+
+  publication:
+    objective: "Finalize, proofread, and mark the guide complete; close the project loop."
+    stop_condition: "Final artifact is marked COMPLETE in ACTIVE-PROJECTS.md and no open blockers remain in LONGRUNNER.md."
+    allowed_tools:
+      - file_system
+    successors: []

@@ -1,0 +1,184 @@
+# .github/workflows/gates.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# NightClaw gate sequence — runs on every push and pull request.
+#
+# Job layout:
+#   test     — pytest -x -q (the primary gate; all five gates are exercised
+#              indirectly by tests, so this is the fast-fail entry point)
+#   gates    — the five nightclaw-ops.py gate commands run in sequence;
+#              depends on `test` so a pytest failure aborts early
+#   lint     — flake8/ruff (optional but recommended; added as allow-fail)
+#   typecheck — mypy (optional; allow-fail until stubs are added)
+#   security — bandit (optional; allow-fail)
+#
+# Lock compliance: gate commands are invoked byte-for-byte as documented;
+# no output strings are modified. Schema fingerprint is validated by
+# schema-lint, not asserted here. Lock 1 is respected.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Gates
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+
+  # ── Job 1: pytest ─────────────────────────────────────────────────────────
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        # -x: stop on first failure
+        # -q: machine-friendly output
+        # Matches the documented gate command exactly.
+        run: python -m pytest -x -q tests/
+        env:
+          # Provide a stable run_id so telemetry tests don't collide.
+          NIGHTCLAW_RUN_ID: "CI-${{ github.run_id }}-${{ github.run_attempt }}"
+          PYTHONPATH: ${{ github.workspace }}
+
+  # ── Job 2: the five nightclaw-ops.py gates ────────────────────────────────
+  gates:
+    name: nightclaw-ops gates
+    runs-on: ubuntu-latest
+    needs: test   # abort if pytest fails first
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Gate 1: schema-lint
+      # Verifies that REGISTRY.md rendered sections are byte-identical to a
+      # fresh schema render. Failure means schema YAML drifted from prose.
+      # Expected output: SCHEMA-LINT:OK:<fingerprint>
+      - name: Gate — schema-lint
+        run: python3 scripts/nightclaw-ops.py schema-lint
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      # Gate 2: schema-sync (idempotency check)
+      # After a clean checkout the REGISTRY must already be in sync.
+      # Expected output: SCHEMA-SYNC:NOOP:<fingerprint>:SECTIONS=7
+      # A SCHEMA-SYNC:CHANGED output means the PR forgot to run schema-sync.
+      - name: Gate — schema-sync (must be NOOP)
+        run: |
+          OUT=$(python3 scripts/nightclaw-ops.py schema-sync)
+          echo "$OUT"
+          echo "$OUT" | grep -q "^SCHEMA-SYNC:NOOP" || \
+            (echo "ERROR: schema-sync was not NOOP — run 'python3 scripts/nightclaw-ops.py schema-sync' and commit" && exit 1)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      # Gate 3: scr-verify
+      # Runs all SCR predicates (SCR-01 through SCR-11) + CL5 cross-check (12 total).
+      # Expected final line: RESULT:PASS
+      - name: Gate — scr-verify
+        run: python3 scripts/nightclaw-ops.py scr-verify
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      # Gate 4: validate-bundles
+      # Parses all R5 bundle definitions and verifies ARG consistency.
+      # Expected final line: RESULT:PASS (N bundles validated)
+      - name: Gate — validate-bundles
+        run: python3 scripts/nightclaw-ops.py validate-bundles
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      # Gate 5: integrity-check
+      # Computes SHA-256 hashes for all 11 protected files listed in
+      # audit/INTEGRITY-MANIFEST.md and verifies each against its stored hash.
+      # Expected final line: RESULT:PASS files=11
+      - name: Gate — integrity-check
+        run: python3 scripts/nightclaw-ops.py integrity-check
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+  # ── Job 3: lint (optional addition — allow-fail) ──────────────────────────
+  lint:
+    name: lint (optional)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # non-blocking until lint violations are resolved
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install "ruff>=0.4"
+
+      # ruff replaces flake8 + isort + pyupgrade in one pass.
+      # --exit-zero: report violations but do not fail the job (allow-fail above
+      # already handles this, but belt-and-suspenders for visibility).
+      - name: Run ruff
+        run: ruff check nightclaw_bridge/ nightclaw_engine/ nightclaw_monitor/ nightclaw_ops/ scripts/ tests/
+        continue-on-error: true
+
+  # ── Job 4: type-check (optional addition — allow-fail) ────────────────────
+  typecheck:
+    name: type-check (optional)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # non-blocking until mypy errors are fixed
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install mypy + stubs
+        run: pip install "mypy>=1.9" "pyyaml>=6.0"
+
+      - name: Run mypy
+        run: mypy nightclaw_bridge/ nightclaw_engine/ nightclaw_monitor/ nightclaw_ops/ --ignore-missing-imports
+        continue-on-error: true
+
+  # ── Job 5: security scan (optional addition — allow-fail) ─────────────────
+  security:
+    name: security scan (optional)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # non-blocking
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bandit
+        run: pip install "bandit>=1.7"
+
+      - name: Run bandit
+        # -r: recursive; -ll: only medium+ severity to reduce noise
+        run: bandit -r nightclaw_bridge/ nightclaw_engine/ nightclaw_monitor/ nightclaw_ops/ -ll
+        continue-on-error: true

@@ -1,0 +1,124 @@
+# R2 — FIELD CONTRACTS
+# Per-object field definitions.
+# REQ: y = required, n = nullable. Enum values UPPERCASE.
+# Sourced from orchestration-os/REGISTRY.md R2 (pre-Merge-1 content).
+
+fields:
+  # OBJ:DISPATCH
+  - { obj: OBJ:DISPATCH, field: priority,           type: INT,      req: y, constraint: "unique per ACTIVE row",                                          fk: "" }
+  - { obj: OBJ:DISPATCH, field: slug,               type: TOKEN,    req: y, constraint: "PK → PROJECTS/[slug]/ must exist",                              fk: "OBJ:PROJ" }
+  - { obj: OBJ:DISPATCH, field: status,             type: ENUM,     req: y, constraint: "ACTIVE|BLOCKED|PAUSED|TRANSITION-HOLD|COMPLETE|ABANDONED",      fk: "" }
+  - { obj: OBJ:DISPATCH, field: last_worker_pass,   type: DATETIME, req: n, constraint: "YYYY-MM-DD HH:MM TZ",                                           fk: "" }
+  - { obj: OBJ:DISPATCH, field: escalation_pending, type: STRING,   req: y, constraint: "none OR surfaced-YYYY-MM-DD OR [reason]",                       fk: "" }
+  - { obj: OBJ:DISPATCH, field: phase,              type: TOKEN,    req: n, constraint: "current phase name",                                            fk: "" }
+  - { obj: OBJ:DISPATCH, field: longrunner_path,    type: PATH,     req: n, constraint: "path to LONGRUNNER.md",                                        fk: "default=PROJECTS/{slug}/LONGRUNNER.md" }
+
+  # OBJ:PROJ
+  - { obj: OBJ:PROJ, field: phase.status,                   type: ENUM,      req: y, constraint: "ACTIVE|BLOCKED|COMPLETE",                                       fk: "" }
+  - { obj: OBJ:PROJ, field: phase.objective,                type: TEXT,      req: y, constraint: "NOT EMPTY",                                                   fk: "" }
+  - { obj: OBJ:PROJ, field: next_pass.objective,            type: TEXT,      req: y, constraint: "NOT EMPTY — empty triggers stale-halt",                        fk: "" }
+  - { obj: OBJ:PROJ, field: next_pass.model_tier,           type: ENUM,      req: y, constraint: "lightweight|standard|heavy",                                  fk: "default=standard" }
+  - { obj: OBJ:PROJ, field: next_pass.context_budget,       type: ENUM,      req: y, constraint: "40K|80K|120K|200K",                                          fk: "default=80K" }
+  - { obj: OBJ:PROJ, field: phase.successor,                type: TEXT,      req: n, constraint: "next phase name — worker proposes at T6 phase_transition",    fk: "" }
+  - { obj: OBJ:PROJ, field: phase.name,                     type: TOKEN,     req: y, constraint: "current phase name",                                          fk: "" }
+  - { obj: OBJ:PROJ, field: phase.started,                  type: DATE,      req: n, constraint: "YYYY-MM-DD phase start date",                                 fk: "" }
+  - { obj: OBJ:PROJ, field: phase.stop_condition,           type: TEXT,      req: n, constraint: "testable stop condition",                                    fk: "" }
+  - { obj: OBJ:PROJ, field: last_pass.date,                 type: DATE,      req: n, constraint: "YYYY-MM-DD",                                                  fk: "" }
+  - { obj: OBJ:PROJ, field: last_pass.objective,            type: TEXT,      req: n, constraint: "prior pass objective",                                       fk: "" }
+  - { obj: OBJ:PROJ, field: last_pass.output_files,         type: TEXT,      req: n, constraint: "comma-separated file paths",                                 fk: "" }
+  - { obj: OBJ:PROJ, field: last_pass.quality,              type: ENUM,      req: n, constraint: "STRONG|ADEQUATE|WEAK|FAIL",                                  fk: "" }
+  - { obj: OBJ:PROJ, field: last_pass.validation_passed,    type: BOOL,      req: n, constraint: "true|false — did output meet pass_output_criteria?",            fk: "default=false" }
+  - { obj: OBJ:PROJ, field: last_pass.weak_pass,             type: BOOL,      req: n, constraint: "true if all 4 value tests failed; false otherwise",             fk: "default=false" }
+  - { obj: OBJ:PROJ, field: next_pass.tools_required,       type: TEXT,      req: n, constraint: "comma-separated tool names",                                 fk: "" }
+  - { obj: OBJ:PROJ, field: next_pass.pass_type,            type: TOKEN,     req: n, constraint: "build-iteration|research|...",                                fk: "" }
+  - { obj: OBJ:PROJ, field: transition_triggered_at,        type: ISO8601Z,  req: n, constraint: "when phase transition was triggered",                         fk: "" }
+  - { obj: OBJ:PROJ, field: transition_expires,             type: ISO8601Z,  req: n, constraint: "when transition hold expires",                                fk: "" }
+  - { obj: OBJ:PROJ, field: transition_reescalation_count,  type: INT,       req: n, constraint: "0-3 re-escalation counter",                                  fk: "default=0" }
+
+  # OBJ:TASK
+  - { obj: OBJ:TASK, field: task_id, type: TOKEN, req: y, constraint: "PK RUN-YYYYMMDD-NNN.Tstep",                                                        fk: "composite PK" }
+  - { obj: OBJ:TASK, field: type,    type: ENUM,  req: y, constraint: "INTEGRITY_CHECK|CHECKPOINT|EXEC|FILE_WRITE|BUNDLE|SESSION_CLOSE|MANAGER_REVIEW|IMPACT_PLAN|SFR", fk: "" }
+  - { obj: OBJ:TASK, field: result,  type: ENUM,  req: y, constraint: "PASS|FAIL|SUCCESS|BLOCKED|PARTIAL",                                               fk: "" }
+
+  # OBJ:RUN
+  - { obj: OBJ:RUN, field: run_id,           type: TOKEN, req: y, constraint: "PK RUN-YYYYMMDD-NNN",    fk: "unique per day" }
+  - { obj: OBJ:RUN, field: session,          type: ENUM,  req: y, constraint: "worker|manager",        fk: "" }
+  - { obj: OBJ:RUN, field: integrity_check,  type: ENUM,  req: y, constraint: "PASS|FAIL",             fk: "" }
+  - { obj: OBJ:RUN, field: outcome,          type: TEXT,  req: y, constraint: "NOT EMPTY",             fk: "" }
+
+  # OBJ:CHANGELOG
+  - { obj: OBJ:CHANGELOG, field: field_path, type: PATH,     req: y, constraint: "FILE:[path]#[field]",  fk: "" }
+  - { obj: OBJ:CHANGELOG, field: old_value,  type: STRING,   req: y, constraint: "prior value or NONE",  fk: "" }
+  - { obj: OBJ:CHANGELOG, field: new_value,  type: STRING,   req: y, constraint: "new value",            fk: "" }
+  - { obj: OBJ:CHANGELOG, field: run_id,     type: TOKEN,    req: y, constraint: "FK→OBJ:RUN",           fk: "OBJ:RUN" }
+  - { obj: OBJ:CHANGELOG, field: t_written,  type: ISO8601Z, req: y, constraint: "when agent wrote it",  fk: "" }
+  - { obj: OBJ:CHANGELOG, field: bundle,     type: TOKEN,    req: n, constraint: "BUNDLE:[name] or none", fk: "" }
+
+  # OBJ:PA
+  - { obj: OBJ:PA, field: pa_id,   type: TOKEN,    req: y, constraint: "PK PA-NNN",                fk: "" }
+  - { obj: OBJ:PA, field: status,  type: ENUM,     req: y, constraint: "ACTIVE|EXPIRED|REVOKED",   fk: "" }
+  - { obj: OBJ:PA, field: expires, type: DATETIME, req: y, constraint: "YYYY-MM-DD HH:MM TZ",      fk: "" }
+
+  # OBJ:CHAIN
+  - { obj: OBJ:CHAIN, field: inv_id,         type: TOKEN,    req: y, constraint: "PK PA-NNN-INV-NNN",          fk: "" }
+  - { obj: OBJ:CHAIN, field: timestamp,      type: ISO8601Z, req: y, constraint: "invocation time",            fk: "" }
+  - { obj: OBJ:CHAIN, field: run_id,         type: TOKEN,    req: y, constraint: "FK→OBJ:RUN",                 fk: "OBJ:RUN" }
+  - { obj: OBJ:CHAIN, field: action_class,   type: TOKEN,    req: y, constraint: "from OPS-PREAPPROVAL classes", fk: "" }
+  - { obj: OBJ:CHAIN, field: slug,           type: TOKEN,    req: n, constraint: "project slug",               fk: "" }
+  - { obj: OBJ:CHAIN, field: scope_match,    type: TEXT,     req: y, constraint: "scope comparison result",    fk: "" }
+  - { obj: OBJ:CHAIN, field: boundary_check, type: TEXT,     req: y, constraint: "boundary evaluation result", fk: "" }
+  - { obj: OBJ:CHAIN, field: result,         type: ENUM,     req: y, constraint: "AUTHORIZED|BLOCKED",          fk: "" }
+
+  # OBJ:NOTIFY
+  - { obj: OBJ:NOTIFY, field: priority,       type: ENUM, req: y, constraint: "LOW|MEDIUM|HIGH|CRITICAL", fk: "" }
+  - { obj: OBJ:NOTIFY, field: action_needed,  type: TEXT, req: y, constraint: "NOT EMPTY",               fk: "" }
+
+  # OBJ:MANIFEST
+  - { obj: OBJ:MANIFEST, field: filepath,       type: PATH,   req: y, constraint: "PK relative to workspace root",                          fk: "" }
+  - { obj: OBJ:MANIFEST, field: sha256,         type: HASH,   req: y, constraint: "exactly 64 hex chars",                                    fk: "" }
+  - { obj: OBJ:MANIFEST, field: verified_by,    type: STRING, req: y, constraint: "{OWNER}-re-signed-YYYY.M.D|nightclaw-manager",            fk: "" }
+  - { obj: OBJ:MANIFEST, field: last_verified,  type: DATE,   req: n, constraint: "YYYY-MM-DD last verification date",                       fk: "" }
+
+  # OBJ:NOTIFY-ARCH
+  - { obj: OBJ:NOTIFY-ARCH, field: content,   type: TEXT,     req: y, constraint: "verbatim copy from NOTIFICATIONS.md", fk: "" }
+  - { obj: OBJ:NOTIFY-ARCH, field: moved_by,  type: STRING,   req: y, constraint: "manager:T8.3",                          fk: "" }
+  - { obj: OBJ:NOTIFY-ARCH, field: moved_at,  type: ISO8601Z, req: y, constraint: "timestamp of prune action",              fk: "" }
+
+  # OBJ:MEMORY
+  - { obj: OBJ:MEMORY, field: date,           type: DATE, req: y, constraint: "YYYY-MM-DD (filename stem)",    fk: "" }
+  - { obj: OBJ:MEMORY, field: session_log,    type: TEXT, req: y, constraint: "structured pass log content",   fk: "" }
+  - { obj: OBJ:MEMORY, field: consolidation,  type: BOOL, req: n, constraint: "true if this is a dream pass output", fk: "default=false" }
+
+  # OBJ:REGISTRY
+  - { obj: OBJ:REGISTRY, field: section,     type: ENUM, req: y, constraint: "R1|R2|R3|R4|R5|R6|R7|CL1-CL6",      fk: "" }
+  - { obj: OBJ:REGISTRY, field: entry_type,  type: ENUM, req: y, constraint: "OBJ|FIELD|ROUTE|EDGE|BUNDLE|SCR|CL", fk: "" }
+
+  # OBJ:TOOLREG
+  - { obj: OBJ:TOOLREG, field: date,       type: DATE,   req: y, constraint: "YYYY-MM-DD discovery date",         fk: "" }
+  - { obj: OBJ:TOOLREG, field: tool,       type: STRING, req: y, constraint: "tool name or path",                 fk: "" }
+  - { obj: OBJ:TOOLREG, field: constraint, type: TEXT,   req: y, constraint: "description of constraint",         fk: "" }
+  - { obj: OBJ:TOOLREG, field: evidence,   type: TEXT,   req: y, constraint: "what triggered the discovery",      fk: "" }
+  - { obj: OBJ:TOOLREG, field: session,    type: STRING, req: y, constraint: "worker|manager|{OWNER} + context",  fk: "" }
+
+  # OBJ:LESSONS
+  - { obj: OBJ:LESSONS, field: date,        type: DATE,  req: y, constraint: "YYYY-MM-DD",                 fk: "" }
+  - { obj: OBJ:LESSONS, field: slug,        type: TOKEN, req: n, constraint: "short identifier for the lesson", fk: "" }
+  - { obj: OBJ:LESSONS, field: observation, type: TEXT,  req: y, constraint: "one sentence minimum",      fk: "" }
+
+  # OBJ:LOCK
+  - { obj: OBJ:LOCK, field: status,                     type: ENUM,     req: y, constraint: "locked|released",                                             fk: "" }
+  - { obj: OBJ:LOCK, field: holder,                     type: STRING,   req: n, constraint: "session:nightclaw-worker|session:nightclaw-manager|—",       fk: "" }
+  - { obj: OBJ:LOCK, field: run_id,                     type: TOKEN,    req: n, constraint: "RUN-YYYYMMDD-NNN|—",                                        fk: "OBJ:RUN (when locked)" }
+  - { obj: OBJ:LOCK, field: locked_at,                  type: ISO8601Z, req: n, constraint: "timestamp of lock acquisition",                             fk: "" }
+  - { obj: OBJ:LOCK, field: expires_at,                 type: ISO8601Z, req: n, constraint: "locked_at + 20 minutes",                                    fk: "" }
+  - { obj: OBJ:LOCK, field: consecutive_pass_failures,  type: INT,      req: y, constraint: "0 on clean release, incremented on stale clear",           fk: "default=0" }
+
+  # OBJ:FM
+  - { obj: OBJ:FM, field: fm_id,            type: TOKEN,  req: y, constraint: "PK FM-NNN (sequential)", fk: "" }
+  - { obj: OBJ:FM, field: name,             type: STRING, req: y, constraint: "kebab-case failure name", fk: "" }
+  - { obj: OBJ:FM, field: symptom,          type: TEXT,   req: y, constraint: "observable behavior",    fk: "" }
+  - { obj: OBJ:FM, field: root_cause,       type: TEXT,   req: y, constraint: "why it happens",         fk: "" }
+  - { obj: OBJ:FM, field: detection_signal, type: TEXT,   req: y, constraint: "how to confirm the match", fk: "" }
+  - { obj: OBJ:FM, field: fix,              type: TEXT,   req: y, constraint: "remediation steps",      fk: "" }
+  - { obj: OBJ:FM, field: prevention,       type: TEXT,   req: n, constraint: "how to prevent recurrence", fk: "" }
+  - { obj: OBJ:FM, field: status,           type: ENUM,   req: y, constraint: "OPEN|MITIGATED|RESOLVED", fk: "" }

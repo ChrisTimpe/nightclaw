@@ -1,0 +1,172 @@
+# R5 — BUNDLE SPECIFICATIONS
+# Named multi-file write operations. The executor (bundle-exec) reads these at runtime.
+#
+# Expression types (exactly four):
+#   LITERAL  (bare)               — the value is the text as written
+#   ARG      ({name})             — resolved from the command-line args at exec time
+#   COMPUTED ({NOW}/{TODAY}/{NOW+field})
+#   NULL     (~)                  — explicit null / clear
+#
+# No TEMPLATE interpolation. LLM constructs full strings and passes as ARGs.
+# CHANGE-LOG entries are emitted automatically by the executor for every
+# MUTATE where old != new.
+#
+# Sourced from orchestration-os/REGISTRY.md R5 (pre-Merge-1 content).
+
+bundles:
+  - name: longrunner_update
+    trigger: "T6 after pass completes (T5 PASS or WEAK)"
+    args: [slug, run_id, quality, objective, output_files, next_objective, model_tier, context_budget, tools]
+    validates:
+      - "LONGRUNNER:{slug}.phase.status EQUALS ACTIVE"
+      - "next_objective NOT_EMPTY"
+      - "quality IN STRONG,ADEQUATE,WEAK,FAIL"
+      - "model_tier IN lightweight,standard,heavy"
+    writes:
+      "LONGRUNNER:{slug}":
+        last_pass.date: "{TODAY}"
+        last_pass.objective: "{objective}"
+        last_pass.output_files: "{output_files}"
+        last_pass.quality: "{quality}"
+        next_pass.objective: "{next_objective}"
+        next_pass.model_tier: "{model_tier}"
+        next_pass.context_budget: "{context_budget}"
+        next_pass.tools_required: "{tools}"
+      "DISPATCH:{slug}":
+        last_worker_pass: "{NOW}"
+    append:
+      "audit/AUDIT-LOG.md": "TASK:{run_id}.T6 | TYPE:BUNDLE | BUNDLE:longrunner_update | RESULT:SUCCESS"
+    notify: null
+    returns: SUCCESS
+
+  - name: phase_transition
+    trigger: "T6 when LONGRUNNER stop_condition met"
+    args: [slug, run_id, successor, escalation_text, action_text]
+    validates:
+      - "LONGRUNNER:{slug}.phase.status EQUALS ACTIVE"
+    writes:
+      "LONGRUNNER:{slug}":
+        phase.status: COMPLETE
+        phase.successor: "{successor}"
+        transition_triggered_at: "{NOW}"
+        transition_expires: "{NOW+transition_timeout_days}"
+        transition_reescalation_count: 0
+      "DISPATCH:{slug}":
+        status: TRANSITION-HOLD
+        escalation_pending: "{escalation_text}"
+    append:
+      "audit/AUDIT-LOG.md": "TASK:{run_id}.T6 | TYPE:BUNDLE | BUNDLE:phase_transition | RESULT:SUCCESS"
+    notify:
+      priority: HIGH
+      action_text: "{action_text}"
+      slug: "{slug}"
+      status: PHASE-TRANSITION
+    returns: SUCCESS
+
+  - name: phase_advance
+    trigger: "T2-ADVANCE when dispatch returns ADVANCE:<slug>"
+    args: [slug, run_id, successor, init_objective]
+    validates:
+      - "LONGRUNNER:{slug}.phase.successor NOT_EMPTY"
+      - "LONGRUNNER:{slug}.phase.status EQUALS COMPLETE"
+    writes:
+      "LONGRUNNER:{slug}":
+        phase.name: "{successor}"
+        phase.status: ACTIVE
+        phase.started: "{TODAY}"
+        phase.successor: ""
+        phase.objective: ""
+        phase.stop_condition: ""
+        transition_triggered_at: "~"
+        transition_expires: "~"
+        transition_reescalation_count: 0
+        next_pass.objective: "{init_objective}"
+        next_pass.pass_type: build-iteration
+      "DISPATCH:{slug}":
+        phase: "{successor}"
+        status: ACTIVE
+        escalation_pending: none
+    append:
+      "audit/AUDIT-LOG.md": "TASK:{run_id}.T2 | TYPE:BUNDLE | BUNDLE:phase_advance | RESULT:SUCCESS"
+    notify: null
+    returns: SUCCESS
+
+  - name: route_block
+    trigger: "T2 BLOCKED | T2.7 unauthorized | T3 tool unavailable"
+    args: [slug, run_id, reason]
+    validates:
+      - "reason NOT_EMPTY"
+    writes:
+      "DISPATCH:{slug}":
+        status: BLOCKED
+        escalation_pending: "{reason}"
+    append:
+      "audit/AUDIT-LOG.md": "TASK:{run_id}.T2 | TYPE:BUNDLE | BUNDLE:route_block | RESULT:BLOCKED"
+    notify: null
+    returns: SUCCESS
+
+  - name: surface_escalation
+    trigger: "Any condition requiring {OWNER} decision"
+    args: [slug, run_id, priority, action_text, context, reason]
+    validates:
+      - "action_text NOT_EMPTY"
+      - "priority IN LOW,MEDIUM,HIGH,CRITICAL"
+    writes:
+      "DISPATCH:{slug}":
+        escalation_pending: "{reason}"
+    append:
+      "audit/AUDIT-LOG.md": "TASK:{run_id}.T2 | TYPE:BUNDLE | BUNDLE:surface_escalation | RESULT:SUCCESS"
+    notify:
+      priority: "{priority}"
+      action_text: "{action_text}"
+      context: "{context}"
+      slug: "{slug}"
+      status: ESCALATION
+    returns: SUCCESS
+
+  - name: pa_invoke
+    # STAYS INLINE — requires LLM judgment for scope/boundary evaluation.
+    # Not handled by bundle-exec. The LLM reads OPS-PREAPPROVAL.md and evaluates.
+    trigger: "T2.7 when exec/extended write needed"
+    args: []
+    inline: true
+    validates_first: "PA exists | status=ACTIVE | expires>now | all scope fields MATCH"
+    if_valid:
+      writes:
+        - "audit/APPROVAL-CHAIN.md → PA-NNN-INV-NNN | scope verification | result"
+        - "audit/AUDIT-LOG.md → APPEND: TASK:[run].T2.7 TYPE:BUNDLE RESULT:SUCCESS"
+    if_invalid:
+      - "calls BUNDLE:surface_escalation"
+      - "then BUNDLE:route_block"
+    returns: "AUTHORIZED | BLOCKED"
+
+  - name: manifest_verify
+    trigger: "Manager T1 — all hashes match"
+    args: [run_id]
+    writes:
+      MANIFEST:
+        last_verified: "{TODAY}"
+        verified_by: nightclaw-manager
+    append:
+      "audit/AUDIT-LOG.md": "TASK:{run_id}.T1 | TYPE:INTEGRITY_CHECK | RESULT:PASS"
+    authority: "manager-authority standing auth covers timestamp-only writes. No PA required."
+    returns: SUCCESS
+
+  - name: session_close
+    trigger: "T9 — end of every pass"
+    args: [run_id, session_entry, memory_entry, audit_entry]
+    validates:
+      - "session_entry NOT_EMPTY"
+    writes:
+      LOCK:
+        status: released
+        run_id: "—"
+        holder: "—"
+        locked_at: "—"
+        expires_at: "—"
+        consecutive_pass_failures: 0
+    append:
+      "audit/SESSION-REGISTRY.md": "{session_entry}"
+      "memory/{TODAY}.md": "{memory_entry}"
+      "audit/AUDIT-LOG.md": "{audit_entry}"
+    returns: SUCCESS

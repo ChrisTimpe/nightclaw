@@ -1,0 +1,87 @@
+# .gitignore — NightClaw
+
+# ── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+.installed.cfg
+MANIFEST
+
+# ── Virtual environments ────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ── Test & coverage ─────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ── Type checkers & linters ─────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.dmypy.json
+dmypy.json
+
+# ── Editor / IDE ────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ── OS noise ────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── Local workspace runtime state (never commit) ────────────────────────
+# NightClaw session artifacts written by live deployments. Root-only to
+# avoid masking the committed templates under audit/, orchestration-os/,
+# and PROJECTS/example-*/.
+/SESSION-LOG.md
+/SESSION-LOG-*.md
+/MEMORY-LOG.md
+/MEMORY-LOG-*.md
+/CANARY.md
+/DISPATCH-STATE.md
+/WAL.md
+/.nightclaw-lock
+/logs/
+*.lock
+
+# ── Secrets & env ───────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+secrets.yaml
+*.pem
+*.key
+*_id_rsa
+*_id_ed25519
+
+# ── Build artifacts from docs / demos ───────────────────────────────────
+*.log
+node_modules/

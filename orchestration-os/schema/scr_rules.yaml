@@ -1,0 +1,22 @@
+# R6 — SELF-CONSISTENCY RULES (metadata only)
+# Rule bodies (the detailed prose describing assertion + verification method)
+# stay in REGISTRY.md R6 as doctrine. This file holds only the executable
+# metadata: id, severity, predicate name.
+#
+# In Merge 2 the engine's cmd_scr_verify becomes a dispatcher that, for each
+# rule here, looks up the predicate by name in nightclaw_engine.protocol.integrity
+# and invokes it. SCR-09 predicate (prompt_bundle_args_match_r5) is fully implemented
+# and runs in scr-verify — the "pending" note was stale from Merge-1 and has been removed.
+
+scr_rules:
+  - { id: SCR-01, severity: HIGH,     predicate: r3_bundles_exist_in_r5,                    title: "Every BUNDLE: name in R3 exists as a BUNDLE: definition in R5" }
+  - { id: SCR-02, severity: HIGH,     predicate: r2_foreign_keys_resolve_to_r1,             title: "Every FK→OBJ: in R2 resolves to an OBJ: entry in R1" }
+  - { id: SCR-03, severity: CRITICAL, predicate: r3_protected_files_are_in_manifest,        title: "Every file in R3 PROTECTED tier is in audit/INTEGRITY-MANIFEST.md" }
+  - { id: SCR-04, severity: HIGH,     predicate: changelog_file_exists,                     title: "audit/CHANGE-LOG.md exists" }
+  - { id: SCR-05, severity: HIGH,     predicate: session_registry_run_ids_unique,            title: "audit/SESSION-REGISTRY.md run_ids are unique (no duplicate RUN-YYYYMMDD-N)" }
+  - { id: SCR-06, severity: MEDIUM,   predicate: r4_bundle_refs_resolve_to_r5,               title: "Every BUNDLE: in R4 edges resolves to a definition in R5" }
+  - { id: SCR-07, severity: HIGH,     predicate: references_cross_doc_consistency,           title: "REFERENCES edges: downstream targets remain consistent with source after source changes" }
+  - { id: SCR-08, severity: HIGH,     predicate: session_close_releases_lock,                title: "LOCK.md status must be released at session close per BUNDLE:session_close" }
+  - { id: SCR-09, severity: HIGH,     predicate: prompt_bundle_args_match_r5,                title: "For every Execute: bundle-exec <name> in prompts, arg names match R5 BUNDLE:{name} ARGS" }
+  - { id: SCR-10, severity: HIGH,     predicate: code_files_have_r3_rows,                    title: "Every .py file in the four code packages (engine/bridge/monitor/ops) and every .html file in apps/monitor/ has a CODE-tier row in R3" }
+  - { id: SCR-11, severity: HIGH,     predicate: r3_code_rows_exist_on_disk,                 title: "Every R3 row at tier CODE names a file that exists on disk (INV-13)" }
