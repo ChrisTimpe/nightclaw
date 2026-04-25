@@ -2,7 +2,7 @@
 
 _What NightClaw is, how this repo proves it, and what it does not claim. Principal-architect level, grounded in the current code and schema._
 
-> **Scope of this document.** This is a human-facing proof artifact that explains the NightClaw protocol. It is **not** part of the operational R3 registry and is not routed. The protocol itself is R1–R7 plus the engine commands, gates, bundles, and audit behavior. Running `python3 scripts/nightclaw-ops.py registry-route PROTOCOL-PROOF.md` returns `ROUTE:UNKNOWN` by design — the file is explanatory doctrine, not an object governed by the protocol. When this document and the schema disagree, trust the schema.
+> **Scope of this document.** This is a human-facing proof artifact that explains the NightClaw protocol. It is **not** part of the operational R3 registry and is not routed. The operational protocol is R1–R6 plus the engine commands, gates, bundles, and audit/change-log behavior. Running `python3 scripts/nightclaw-ops.py registry-route PROTOCOL-PROOF.md` returns `ROUTE:UNKNOWN` by design — the file is explanatory doctrine, not an object governed by the protocol. When this document and the schema disagree, trust the schema.
 
 ## 0. The claim
 
@@ -10,7 +10,7 @@ _What NightClaw is, how this repo proves it, and what it does not claim. Princip
 
 Stated as code-true properties:
 
-1. **The registry is machine-readable.** Seven sections — R1 objects, R2 field contracts, R3 routing, R4 edges, R5 bundles, R6 SCR rules, R7 change-log format — live as YAML under `orchestration-os/schema/` and are loaded into a typed `SchemaModel` at every engine command.
+1. **The schema is machine-readable.** R1 objects, R2 field contracts, R3 routing, R4 edges, R5 bundles, R6 SCR rules, and the change-log/audit format rules live as YAML under `orchestration-os/schema/` and are loaded into a typed `SchemaModel` at every engine command. `orchestration-os/REGISTRY.md` is the rendered human-readable projection.
 2. **Writes go through named transactions with declared preconditions.** The R5 bundle executor validates before mutating and emits audit rows automatically.
 3. **Every field change is logged with two timestamps.** `audit/CHANGE-LOG.md` captures effective + recorded, enabling point-in-time reconstruction.
 4. **Protected files cannot drift silently.** SHA-256 signed; `integrity-check` halts the next session on divergence.
@@ -142,7 +142,7 @@ The repo ships five technical surfaces in strict dependency order (ARCHITECTURE.
 2. **Telemetry emitter** — `nightclaw_ops/telemetry.py` + `nightclaw_ops/lifecycle.py`. Fire-and-forget JSON to `/tmp/nightclaw-ops.sock`. Fail-open: if nothing listens, `emit_step` no-ops and the engine continues.
 3. **Bridge server** — `nightclaw_bridge/`. Reads the ops socket, fans to WebSocket, serves `apps/monitor/*.html`. **Does not import `nightclaw_engine`.** Invokes admin functionality only by spawning `scripts/nightclaw-admin.sh` / `scripts/nightclaw-ops.py` as subprocesses.
 4. **Monitor UI** — `apps/monitor/*.html` + `nightclaw_monitor/`. Live reflection plus a token-authenticated RW admin panel. Localhost bind only; RW default-deny if `NIGHTCLAW_BRIDGE_TOKEN` unset; `hmac.compare_digest` token check; failed-attempt rate limiting per IP; fixed verb vocabulary (`ADMIN_CMD_RO | ADMIN_CMD_RW`); no shell interpolation.
-5. **LLM bootstrap** — `orchestration-os/LLM-BOOTSTRAP.yaml` + `nightclaw-ops.py bootstrap`. Developer/agent-dev orientation tool. Invoked by humans only; cron prompts never reference it.
+5. **LLM bootstrap** — `internal_enhancement/LLM-BOOTSTRAP.yaml` + `nightclaw-ops.py bootstrap`. Developer/agent-dev orientation tool. Invoked by humans only; cron prompts never reference it.
 
 INV-15 (`tests/core/test_reachability.py`) enforces the DAG at the Python-symbol level. `tests/core/test_surface_boundaries.py` (six tests) pins the import-direction invariants: engine ↛ bridge/monitor, bridge ↛ engine, cron prompts ↛ `LLM-BOOTSTRAP.yaml`, step-map parity between parent monitor and data-flow iframe, admin verb vocabulary is a closed disjoint set.
 
@@ -166,7 +166,7 @@ Everything in this document maps to a file and a command in the repo. To verify 
 |---|---|
 | Live schema shape (objects / fields / routes / edges / bundles / SCR rules / protected paths / fingerprint) | `python3 scripts/nightclaw-ops.py bootstrap --track=general` (Repo summary section) or read each `schema/*.yaml` directly |
 | `longrunner_update` bundle spec | `sed -n '17,40p' orchestration-os/schema/bundles.yaml` |
-| R4 edges touched by that bundle | `python3 scripts/nightclaw-ops.py cascade-read BUNDLE:longrunner_update` and `cascade-upstream` on each target |
+| R4 edges touched by that bundle | `python3 scripts/nightclaw-ops.py cascade-read BUNDLE:longrunner_update` and `python3 scripts/nightclaw-ops.py cascade-read PROJECTS/example-research/LONGRUNNER.md` |
 | R3 route for `PROJECTS/<slug>/LONGRUNNER.md` | `python3 scripts/nightclaw-ops.py registry-route PROJECTS/example/LONGRUNNER.md` → `ROUTE:STANDARD:BUNDLE:longrunner_update` |
 | SCR-09 definition | `grep SCR-09 orchestration-os/schema/scr_rules.yaml` |
 | Protected-file triangle | compare `schema/protected.yaml`, R3 `tier=PROTECTED` rows, and `audit/INTEGRITY-MANIFEST.md` |
