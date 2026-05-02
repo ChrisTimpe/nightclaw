@@ -5,18 +5,9 @@ starts sessions, schedules crons, manages model/provider settings, and provides
 the agent runtime. NightClaw provides the workspace files, prompts, schema,
 commands, logs, and gates used by those sessions.
 
-The repo is designed to be inspected through the code and the schema, not
-through README prose alone. For a developer or maintenance LLM, start with:
-
-```bash
-python3 scripts/nightclaw-ops.py bootstrap --track=general
-python3 scripts/nightclaw-ops.py schema-lint
-python3 scripts/nightclaw-ops.py schema-sync
-python3 scripts/nightclaw-ops.py scr-verify
-python3 scripts/nightclaw-ops.py validate-bundles
-python3 scripts/nightclaw-ops.py integrity-check
-pytest tests/ -q
-```
+**First-time operator?** Jump to [§ Install](#install). The commands shown later
+in this README under §Bootstrap and §Development rules are for repo
+maintainers and maintenance LLMs — they are not part of the install path.
 
 Current validated package shape:
 
@@ -24,6 +15,159 @@ Current validated package shape:
 377 passed, 1 skipped
 Smoke Test: 18 passed 0 failed
 ```
+
+## Why NightClaw
+
+OpenClaw is the runtime — sessions, crons, models, providers. NightClaw is the
+workspace and protocol layer that sits on top of it. The split matters:
+
+- **Reference implementation, not a framework.** NightClaw is one concrete
+  realization of the protocol. The methods are intentionally customizable —
+  swap in your own domain-specific bundles, predicates, prompts, and phase
+  rules without forking the engine.
+- **Compounding workspace knowledge.** Memory, audit, change log, project
+  state, and notifications accumulate as files in the workspace. Every pass
+  starts from what previous passes wrote down, not from scratch.
+- **Inspectable gates, not vibes.** Projects, phases, state transitions,
+  audit entries, protected paths, and schema rules are all expressed as
+  typed YAML and checked by deterministic commands (`schema-lint`,
+  `scr-verify`, `validate-bundles`, `integrity-check`). What the LLM is
+  allowed to do is what the schema says.
+- **Model- and provider-portable.** No model lock-in. The worker switches
+  tier between passes from `MODEL-TIERS.md`; the manager pins a stronger
+  model via cron flag. Any provider OpenClaw supports works.
+
+This repo is one such NightClaw-style implementation. It is exploratory
+engineering and architecture aligned with open source and OpenClaw, not a
+product — others can adopt it as-is or fork the bundles, prompts, schema,
+and predicates into their own NightClaw-style protocol.
+
+### Early test demos
+
+Two early test/demo links that motivated the design — not product promises,
+just illustrations of the kind of work autonomous passes can compound toward:
+
+- <https://www.tokenarch.com/cinematic>
+- <https://www.tokenarch.com/nightclaw-demo.html>
+
+## How interaction works
+
+NightClaw runs as two scheduled OpenClaw cron sessions over a workspace you
+own on disk. After install you mostly approve or reject what the sessions
+surface; you don't drive the pass loop yourself.
+
+**Setup the operator does once, by hand:**
+
+1. Run `bash scripts/install.sh` from the workspace root. It is interactive
+   and substitutes `{OWNER}`, `{WORKSPACE_ROOT}`, `{OPENCLAW_CRON_DIR}`,
+   `{OPENCLAW_LOGS_DIR}`, `{PLATFORM}`, and other install placeholders
+   across the workspace; writes the three model tier IDs into
+   `MODEL-TIERS.md` when provided; then generates the initial
+   protected-file hashes in `audit/INTEGRITY-MANIFEST.md`.
+2. Open `SOUL.md`, replace `{DOMAIN_ANCHOR}` with 2–3 sentences describing
+   your domain focus, and re-sign: `bash scripts/resign.sh SOUL.md`.
+   `SOUL.md` is a protected file, so the new hash must be re-recorded
+   before any session will run.
+3. Schedule the two crons described in `DEPLOY.md` § Step 5: a worker
+   (`session:nightclaw-worker`) and a manager (`session:nightclaw-manager`).
+   Each fires as a fresh, non-persistent OpenClaw session — no in-memory
+   state carries between runs; everything they need to "remember" is in
+   the workspace files.
+
+**What each session does on its own:**
+
+Both prompts follow a structured T-step pass lifecycle (T0–T9 with
+substeps) where each step calls a deterministic engine command that
+curates only the context that step needs, so a fresh session does not
+re-load irrelevant history.
+
+- The **worker** executes its prompt (`orchestration-os/CRON-WORKER-PROMPT.md`)
+  end-to-end: integrity check, lock acquisition, dispatch, one objective at
+  T4, validate, state update, optional OS improvement, session close. It
+  picks the top-priority project from `ACTIVE-PROJECTS.md` via the
+  deterministic `dispatch` command.
+- The **manager** runs less often, reviews recent worker activity, surfaces
+  escalations, runs anomaly/spine checks on the audit log, and — when the
+  workspace is idle — does strategic-direction work (T3.5): reviewing draft
+  proposals, suggesting follow-on projects, or flagging a stale Domain
+  Anchor.
+- When no projects exist or all are paused/blocked, the worker's idle cycle
+  (Tier 4 in `orchestration-os/OPS-IDLE-CYCLE.md`) can draft a new project
+  proposal grounded in the `SOUL.md` Domain Anchor and `USER.md` constraints.
+  The proposal is written as `PROJECTS/<slug>/LONGRUNNER-DRAFT.md` and
+  surfaced in `NOTIFICATIONS.md` for you to approve or decline. The exact
+  research/grounding shape is prompt-guided, not hardcoded — the engine
+  enforces where it gets written, not how the proposal is reasoned.
+
+**What you actually do day to day:**
+
+- **Approve or reject new projects.** Rename `LONGRUNNER-DRAFT.md` →
+  `LONGRUNNER.md` and add a row to `ACTIVE-PROJECTS.md` to approve, or
+  delete the draft to decline. The `nightclaw-admin` helper script wraps
+  these moves.
+- **Approve or reject phase escalations.** When a phase's stop conditions
+  evaluate TRUE, the worker writes `phase.successor` and fires the
+  `phase_transition` bundle, which surfaces a HIGH-priority entry to
+  `NOTIFICATIONS.md` and sets `escalation_pending` on the project.
+- **Provide pre-approvals** in `orchestration-os/OPS-PREAPPROVAL.md` for
+  classes of action that should run unattended (e.g. extended file writes,
+  phase auto-advance with declared boundaries). The worker's `pa_invoke`
+  bundle validates scope/boundary/expiry against the planned action before
+  executing — out-of-scope use is blocked and re-surfaced.
+- **Provide manual guidance** when the manager surfaces a strategic
+  direction note, a quality concern, or a stale Domain Anchor. Edits to
+  `SOUL.md` or `USER.md` are followed by `bash scripts/resign.sh <file>`
+  on the protected files.
+
+The manager's draft-review notification phrases its read on a draft as
+"strong draft" or "weak draft" (see `CRON-MANAGER-PROMPT.md` T3.5-A) —
+it is a protocol-guided judgment surfaced as a recommendation, not a
+numeric score. Pass quality is recorded as the
+`last_pass.quality` enum (`STRONG | ADEQUATE | WEAK | FAIL`) by the
+worker at T5.5.
+
+**State that crosses sessions, by file:**
+
+- Project state, phases, escalation_pending, and the next pass plan live
+  in `PROJECTS/<slug>/LONGRUNNER.md` (`last_pass.*`, `next_pass.*`,
+  `phase.*` fields — see `orchestration-os/schema/fields.yaml`).
+- Field-level mutations are recorded in `audit/CHANGE-LOG.md` whenever a
+  bundle write changes a value; step-level events go to
+  `audit/AUDIT-LOG.md` (append-only); session bookkeeping goes to
+  `audit/SESSION-REGISTRY.md`.
+- Pending decisions for the operator surface in `NOTIFICATIONS.md`.
+- OS-level lessons the worker learns at T7 are appended to the relevant
+  `orchestration-os/OPS-*.md` doctrine files (e.g.
+  `OPS-KNOWLEDGE-EXECUTION.md`, `OPS-FAILURE-MODES.md`,
+  `OPS-QUALITY-STANDARD.md`) per the gate in the worker prompt.
+
+**Model tiering across fresh sessions.** Because each cron run is a fresh
+session, the current pass cannot keep state in memory for the next one.
+Instead, the worker writes its planned `next_pass.model_tier`
+(`lightweight | standard | heavy`) into the project's `LONGRUNNER.md`,
+and at T9.5 calls `set-model-tier` so OpenClaw's platform default model
+for the next worker session matches that tier via `MODEL-TIERS.md`. The
+manager cron is unaffected — it pins its own model via `--model` on the
+cron line.
+
+**Multiple projects in one workspace.** `ACTIVE-PROJECTS.md` is the
+dispatch table; the engine's `dispatch` command applies the
+status/`escalation_pending`/priority filtering deterministically. If the
+top project is blocked awaiting an approval or escalation, dispatch
+selects the next eligible row instead of consuming LLM tokens scanning
+for it. The same is true at T1.5 when no project is dispatchable: the
+`scan-notifications` and `idle-triage` commands route the pass to the
+right idle tier without the model having to read the full doctrine.
+
+**Why this saves tokens.** Routing-critical context (next pass objective,
+model tier, context budget, tool requirements, last-pass quality, phase
+stop condition) is curated by the deterministic
+`longrunner-extract` command — the prompt instructs the worker to consume
+those key=value lines before reading the full LONGRUNNER, and to read the
+full file only at T4 when narrative context is actually required. Pulling
+project state and routing decisions through engine commands rather than
+free-form file reads is what keeps fresh sessions from re-loading
+irrelevant history.
 
 ## Use at your own risk
 
@@ -41,6 +185,84 @@ Results will vary. Nothing is guaranteed. Review the configuration, protect
 credentials, monitor automated runs, and validate outputs before relying on
 them. NightClaw is provided under the Apache License 2.0 on an "AS IS" basis,
 without warranties or conditions of any kind.
+
+## Install
+
+NightClaw is an overlay on top of an existing OpenClaw workspace. The install
+path is: install OpenClaw, create the workspace, copy NightClaw on top, run
+`install.sh` from the workspace root, then complete the post-install checklist.
+
+### Requirements
+
+```text
+OpenClaw 2026.4.5+   (the runtime — install this first)
+Python 3.10+
+PyYAML
+pytest               (for test/gate runs)
+```
+
+### Step 1 — Install OpenClaw and create a workspace
+
+Follow the upstream OpenClaw install for your platform, then create the
+workspace directory NightClaw will live in (default: `~/.openclaw/workspace`).
+
+### Step 2 — Copy NightClaw into the OpenClaw workspace
+
+Copy or unpack the NightClaw repo contents directly into your OpenClaw
+workspace root — the NightClaw files and folders sit alongside whatever
+OpenClaw already created there. Do not nest them in a `nightclaw/`
+subdirectory.
+
+### Step 3 — Run `install.sh` from the workspace root
+
+```bash
+# Run from: the OpenClaw workspace root (where SOUL.md now lives)
+bash scripts/install.sh
+```
+
+`install.sh` is the install entrypoint. It substitutes placeholders across
+the workspace, writes `MODEL-TIERS.md` values when provided, generates the
+initial SHA-256 hashes for protected files, and creates required
+directories. The script is interactive — it prompts for owner, workspace
+root, cron/logs paths, platform, and the three model tier IDs.
+
+### Step 4 — Post-install checklist
+
+Work through these in order, from the workspace root:
+
+1. **Set the SOUL domain anchor.** Open `SOUL.md`, replace `{DOMAIN_ANCHOR}`
+   with 2–3 sentences describing your domain focus, then re-sign:
+   ```bash
+   bash scripts/resign.sh SOUL.md
+   ```
+2. **Confirm `USER.md`.** Fill in name, timezone, and any domain
+   restrictions. If you change it, re-sign:
+   ```bash
+   bash scripts/resign.sh USER.md
+   ```
+3. **Confirm `MODEL-TIERS.md`.** If you skipped any tier during install, edit
+   the file directly and set the model IDs. `MODEL-TIERS.md` is not a
+   protected file, so no re-sign is needed.
+4. **Verify integrity and validate the workspace:**
+   ```bash
+   bash scripts/verify-integrity.sh        # must show 11/11 PASS
+   bash scripts/validate.sh
+   python3 scripts/nightclaw-ops.py schema-lint
+   python3 scripts/nightclaw-ops.py scr-verify
+   python3 scripts/nightclaw-ops.py validate-bundles
+   python3 scripts/nightclaw-ops.py integrity-check
+   pytest tests/ -q
+   ```
+5. **Continue to `DEPLOY.md` for runtime setup.** Cron creation, model
+   provider configuration, heartbeat tuning, and emergency stop live there:
+   - `DEPLOY.md` § Step 5 — Configure Two Crons
+   - `DEPLOY.md` § Model Configuration
+   - `DEPLOY.md` § Heartbeat Configuration
+   - `DEPLOY.md` § Uninstall & Emergency Stop
+
+The cron/runtime details deliberately are not duplicated here. If you skip
+the `DEPLOY.md` handoff, NightClaw will not run on its own — there will be
+no scheduled worker or manager.
 
 ## Repo layout
 
@@ -308,57 +530,30 @@ extend
 fix_bug
 ```
 
-## Install
-
-Minimum runtime:
-
-```text
-Python 3.10+
-PyYAML
-OpenClaw
-```
-
-Test/gate runs also use `pytest`.
-
-Recommended install path:
-
-```bash
-bash scripts/install.sh
-bash scripts/verify-integrity.sh
-bash scripts/validate.sh
-python3 scripts/nightclaw-ops.py schema-lint
-python3 scripts/nightclaw-ops.py schema-sync
-python3 scripts/nightclaw-ops.py scr-verify
-python3 scripts/nightclaw-ops.py validate-bundles
-python3 scripts/nightclaw-ops.py integrity-check
-pytest tests/ -q
-```
-
-`install.sh` substitutes install placeholders, writes `MODEL-TIERS.md` values
-when provided, and generates initial protected-file hashes.
-
-The domain anchor in `SOUL.md` is intentionally manual. The model tier values
-in `MODEL-TIERS.md` can be edited manually if they are not set during install.
-
-See `DEPLOY.md` for OpenClaw model setup, cron examples, heartbeat guidance,
-day-to-day operation, and emergency stop notes.
-
 ## Smoke test
 
-Run the smoke test against a packaged copy, not the working repo:
+Run the smoke test against a packaged copy, not the working repo. The
+checkout directory name is not assumed — replace `<repo-dir>` with whatever
+your local checkout is named (commonly `nightclaw`):
 
 ```bash
+# Run from: inside your NightClaw checkout
+REPO_DIR=$(basename "$PWD")
 cd ..
-zip -rq /tmp/nightclaw-smoke.zip nightclaw \
-  -x 'nightclaw/.git/*' \
-     'nightclaw/__pycache__/*' \
-     'nightclaw/**/__pycache__/*' \
-     'nightclaw/.pytest_cache/*' \
-     'nightclaw/**/.pytest_cache/*'
+zip -rq /tmp/nightclaw-smoke.zip "$REPO_DIR" \
+  -x "$REPO_DIR/.git/*" \
+     "$REPO_DIR/__pycache__/*" \
+     "$REPO_DIR/**/__pycache__/*" \
+     "$REPO_DIR/.pytest_cache/*" \
+     "$REPO_DIR/**/.pytest_cache/*"
 
-cd nightclaw
+cd "$REPO_DIR"
 bash scripts/smoke-test.sh /tmp/nightclaw-smoke.zip
 ```
+
+`scripts/smoke-test.sh` itself extracts the zip into a `mktemp -d` and
+locates `SOUL.md` to find the workspace root, so the top-level folder name
+inside the zip does not matter.
 
 The smoke test extracts a clean copy, runs install flow checks, verifies
 protected-file hashing, creates a sample project, simulates T0 protected-file

@@ -44,7 +44,7 @@ done
 PY_OK=$(python3 -c 'import sys; print("ok" if sys.version_info >= (3,10) else "")' 2>/dev/null || true)
 if [[ "$PY_OK" != "ok" ]]; then
     PY_VER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "unknown")
-    error "Python 3.10+ is required (found $PY_VER). On Ubuntu: 'sudo apt install python3'; see README.md § Requirements."
+    error "Python 3.10+ is required (found $PY_VER). On Ubuntu: 'sudo apt install python3'; see README.md § Install."
 fi
 
 python3 -c 'import yaml' 2>/dev/null || \
@@ -267,10 +267,9 @@ echo "     Then re-sign: bash scripts/resign.sh SOUL.md"
 echo "  3. Edit USER.md — fill in your name, timezone, and domain restrictions"
 echo "     Then re-sign: bash scripts/resign.sh USER.md"
 echo "  4. Run: openclaw config set agents.defaults.timeoutSeconds 600"
-echo "  5. Create two crons — exact commands in README.md §Cron setup"
-echo "     or DEPLOY.md §Step 5 for concrete interval recommendations"
+echo "  5. Create two crons — exact commands in DEPLOY.md § Step 5 — Configure Two Crons"
 echo "  6. Run: bash scripts/validate.sh to check internal consistency"
 echo "  7. Start a new project: bash scripts/new-project.sh <slug>"
 echo ""
-echo "Full install guide: README.md §Install"
+echo "Full install guide: README.md § Install"
 echo ""

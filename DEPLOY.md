@@ -97,7 +97,7 @@ bash scripts/install.sh
 
 This prompts for your configuration values, substitutes all placeholders across every `.md`
 file, and generates the initial SHA-256 integrity hashes. It is the only manual step —
-everything else is automated from here. Full details: [README.md § Automated install](README.md#automated-install-recommended).
+everything else is automated from here. Full details: [README.md § Install](README.md#install).
 
 ---
 
